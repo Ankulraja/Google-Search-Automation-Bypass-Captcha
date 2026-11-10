@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { execSync } from "child_process";
 import puppeteer, { Browser, Page } from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
@@ -15,13 +15,13 @@ const BROWSERS: Record<BrowserKind, { label: string; exe: string; src: string; c
     label: "Google Chrome",
     exe: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     src: path.join(os.homedir(), "Library/Application Support/Google/Chrome"),
-    copy: path.join(os.tmpdir(), "scribe-chrome-profile"),
+    copy: path.join(os.tmpdir(), "gsa-chrome-profile"),
   },
   brave: {
     label: "Brave",
     exe: process.env.BRAVE_PATH || "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
     src: path.join(os.homedir(), "Library/Application Support/BraveSoftware/Brave-Browser"),
-    copy: process.env.PROFILE_COPY || path.join(os.tmpdir(), "scribe-brave-profile"),
+    copy: process.env.PROFILE_COPY || path.join(os.tmpdir(), "gsa-brave-profile"),
   },
 };
 const PUBLIC = path.join(__dirname, "public");
@@ -99,7 +99,7 @@ function syncProfile(kind: BrowserKind, profile: string) {
       profileNote = blocked
         ? `Used the last saved ${b.label} profile copy (macOS blocked reading ${b.label}'s folder; give your terminal Full Disk Access to refresh logins)`
         : `Used the last saved ${b.label} profile copy (refresh failed)`;
-      console.warn("[scribe] " + profileNote);
+      console.warn("[search-automation] " + profileNote);
       return;
     }
     throw new Error(
@@ -211,11 +211,11 @@ async function runJob(browser: Browser, job: Job) {
   const page = ctx ? await ctx.newPage() : await browser.newPage();
   if (job.device === "mobile") await emulateMobile(page, browser);
   try {
-    const scribe = new Scribe(page, { visualize: true });
+    const human = new Humanizer(page, { visualize: true });
     await page.goto("https://www.google.com", { waitUntil: "networkidle2" });
     await sleep(1000);
-    await scribe.click('textarea[name="q"], input[name="q"]');
-    await scribe.type(job.query);
+    await human.click('textarea[name="q"], input[name="q"]');
+    await human.type(job.query);
     await sleep(400);
     await Promise.all([
       page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {}),
@@ -278,7 +278,7 @@ async function work() {
         if (browser && (browserKey !== key || !browser.connected)) await closeBrowser();
         if (!browser) {
           if (job.mode === "incognito") {
-            tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-incognito-"));
+            tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gsa-incognito-"));
             browser = await launchIncognito(job.browser, tmpDir);
           } else {
             syncProfile(job.browser, job.profile!);
@@ -565,14 +565,14 @@ const server = http.createServer(async (req, res) => {
 
     send(res, 404, "Not found", "text/plain");
   } catch (e: any) {
-    console.error("[scribe] request failed:", req.url, e?.message || e);
+    console.error("[search-automation] request failed:", req.url, e?.message || e);
     if (res.headersSent) return res.end(); // never crash the server on a half-sent response
     json(res, { error: String(e?.message || e) }, 500);
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`Scribe UI running:`);
+  console.log(`Search Automation UI running:`);
   console.log(`  Page 1 (run queries):  http://localhost:${PORT}/`);
   console.log(`  Page 2 (page source):  http://localhost:${PORT}/source`);
   console.log(`Remember to start the path server: ../.venv/bin/python server/server.py`);

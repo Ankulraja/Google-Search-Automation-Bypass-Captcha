@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 (async () => {
   const browser = await puppeteer.launch({
@@ -8,7 +8,7 @@ import Scribe from "../index";
   });
   const page = await browser.newPage();
 
-  const scribe = new Scribe(page, {
+  const human = new Humanizer(page, {
     visualize: true,
   });
 
@@ -35,7 +35,7 @@ import Scribe from "../index";
 
   if (hcaptchaFrame) {
     await hcaptchaFrame.waitForSelector("#checkbox");
-    await scribe.click("#checkbox", { frame: hcaptchaFrame });
+    await human.click("#checkbox", { frame: hcaptchaFrame });
   } else {
     throw new Error("hcaptchaFrame is undefined");
   }

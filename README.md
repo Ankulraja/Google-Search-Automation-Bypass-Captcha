@@ -1,9 +1,5 @@
 # Google-Search-Automation-Bypass-Captcha
 
-<p align="center">
-  <img src="assets/banner.png" alt="Banner">
-</p>
-
 Automate Google searches in a real browser while behaving like a human, so Google is far less likely to flag the session and show a CAPTCHA. Every search is saved (full page HTML + parsed results) and can be browsed from a small local web UI.
 
 It works by combining three things:
@@ -25,7 +21,7 @@ flowchart LR
     U[You] -->|enter queries| UI["Capture UI<br/>localhost:4000"]
     UI -->|queue jobs| W[Job worker]
     W -->|launch| B["Chrome / Brave<br/>logged-in or incognito<br/>desktop or mobile"]
-    W -->|click / type| S[Scribe library]
+    W -->|click / type| S[Humanizer library]
     S -->|start + end point| P["Path server (Flask + PyTorch)<br/>localhost:3000"]
     P -->|human-like path| S
     S -->|mouse + keyboard events| B
@@ -42,7 +38,7 @@ sequenceDiagram
     participant UI as Capture UI (:4000)
     participant W as Job worker
     participant B as Browser
-    participant S as Scribe
+    participant S as Humanizer
     participant M as Path server (:3000)
 
     UI->>W: POST /api/run (queries, mode, browser, device)
@@ -73,8 +69,8 @@ flowchart TD
     B --> C["CVAE decoder (LSTM)<br/>conditioned on start + end"]
     C --> D[Raw 50-point path]
     D --> E["Rotate / scale / shift<br/>so it starts and ends exactly on target"]
-    E --> F[Return path to Scribe]
-    F --> G["Scribe interpolates extra points<br/>and moves the mouse step by step"]
+    E --> F[Return path to Humanizer]
+    F --> G["Humanizer interpolates extra points<br/>and moves the mouse step by step"]
 ```
 
 Because `z` is random, the path is different every time, even between the same two points.
@@ -99,8 +95,8 @@ flowchart TD
 
 ```
 .
-├── puppeteer-scribe/          # Main automation project
-│   ├── index.ts               # Scribe library: human-like click(), type(), moveMouse()
+├── search-automation/          # Main automation project
+│   ├── index.ts               # Humanizer library: human-like click(), type(), moveMouse()
 │   ├── server/server.py       # Path server: serves the trained model on :3000
 │   ├── model/                 # Trained model file(s) (*.pt), newest is used
 │   ├── ui/
@@ -125,14 +121,14 @@ cd Google-Search-Automation-Bypass-Captcha
 
 # Python env for the path server
 python3 -m venv .venv
-.venv/bin/pip install -r puppeteer-scribe/server/requirements.txt
+.venv/bin/pip install -r search-automation/server/requirements.txt
 
 # Node dependencies
-cd puppeteer-scribe
+cd search-automation
 npm install
 ```
 
-Make sure there is a trained model (`*.pt`) in `puppeteer-scribe/model/`. See [Training your own model](#training-your-own-model) to create one.
+Make sure there is a trained model (`*.pt`) in `search-automation/model/`. See [Training your own model](#training-your-own-model) to create one.
 
 ---
 
@@ -141,14 +137,14 @@ Make sure there is a trained model (`*.pt`) in `puppeteer-scribe/model/`. See [T
 ### 1. Start the path server (terminal 1)
 
 ```bash
-cd puppeteer-scribe
+cd search-automation
 ../.venv/bin/python server/server.py      # runs on http://localhost:3000
 ```
 
 ### 2. Start the capture UI (terminal 2)
 
 ```bash
-cd puppeteer-scribe
+cd search-automation
 npx ts-node ui/server.ts                  # runs on http://localhost:4000
 ```
 
@@ -167,7 +163,7 @@ Open **http://localhost:4000** and:
 ### 3. Or run an example script
 
 ```bash
-cd puppeteer-scribe
+cd search-automation
 npm test local-demo.ts         # offline demo page: watch the mouse + typing
 npm test google-search.ts      # Google search in Puppeteer's Chromium
 npm test brave-google.ts       # Google search in Brave (temp profile), prints results
@@ -188,22 +184,22 @@ Useful environment variables:
 
 ```ts
 import puppeteer from "puppeteer";
-import Scribe from "./index";
+import Humanizer from "./index";
 
 const browser = await puppeteer.launch({ headless: false, defaultViewport: null });
 const page = await browser.newPage();
-const scribe = new Scribe(page, { visualize: true, wpm: 80 });
+const human = new Humanizer(page, { visualize: true, wpm: 80 });
 
 await page.goto("https://www.google.com");
-await scribe.click('textarea[name="q"]');               // human-like mouse path + click
-await scribe.type("industrial air compressor", {        // human-like typing
+await human.click('textarea[name="q"]');               // human-like mouse path + click
+await human.type("industrial air compressor", {        // human-like typing
   wpm: 60,
   typoChance: 0.05,
 });
 await page.keyboard.press("Enter");
 ```
 
-`Scribe` options: `apiUrl` (path server, default `http://localhost:3000/generate_path`), `wpm`, `clickDelay`, `moveDelay`, `visualize` (shows a dot where the cursor is), `startPosition`.
+`Humanizer` options: `apiUrl` (path server, default `http://localhost:3000/generate_path`), `wpm`, `clickDelay`, `moveDelay`, `visualize` (shows a dot where the cursor is), `startPosition`.
 
 ---
 
@@ -216,13 +212,13 @@ await page.keyboard.press("Enter");
    pip install -r model/requirements.txt
    cd model && python train.py
    ```
-4. Copy the new file from `model/models/` into `puppeteer-scribe/model/`. The path server automatically uses the newest one.
+4. Copy the new file from `model/models/` into `search-automation/model/`. The path server automatically uses the newest one.
 
 ---
 
 ## Credits & license
 
-Built on top of [Scribe](https://github.com/sameelarif/scribe) by Sameel Arif, which provides the mouse-movement model, training scripts and data-collection UI. This project adds human-like typing, real-browser (Chrome/Brave) profile support, mobile emulation, CAPTCHA detection and the capture UI.
+The mouse-movement model, training scripts and data-collection app come from [sameelarif/scribe](https://github.com/sameelarif/scribe) by Sameel Arif (credit required by the license). This project adds human-like typing, real-browser (Chrome/Brave) profile support, mobile emulation, CAPTCHA detection and the capture UI.
 
 Licensed under [Creative Commons Attribution-NonCommercial 4.0](LICENSE) (inherited from the original project). Commercial use requires permission from the original author.
 

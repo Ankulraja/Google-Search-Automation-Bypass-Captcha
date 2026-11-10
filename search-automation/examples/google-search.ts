@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 (async () => {
   const browser = await puppeteer.launch({
@@ -8,7 +8,7 @@ import Scribe from "../index";
   });
   const page = await browser.newPage();
 
-  const scribe = new Scribe(page, {
+  const human = new Humanizer(page, {
     visualize: true,
   });
 
@@ -17,9 +17,9 @@ import Scribe from "../index";
 
   await page.goto("https://www.google.com");
 
-  await scribe.click('textarea[title="Search"]');
+  await human.click('textarea[title="Search"]');
 
-  await scribe.type("how long are dolphins in feet");
+  await human.type("how long are dolphins in feet");
 
-  await scribe.click('input[aria-label="Google Search"]');
+  await human.click('input[aria-label="Google Search"]');
 })();

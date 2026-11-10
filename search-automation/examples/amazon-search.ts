@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 (async () => {
   const browser = await puppeteer.launch({
@@ -8,7 +8,7 @@ import Scribe from "../index";
   });
   const page = await browser.newPage();
 
-  const scribe = new Scribe(page, {
+  const human = new Humanizer(page, {
     visualize: true,
   });
 
@@ -16,15 +16,15 @@ import Scribe from "../index";
 
   await page.waitForSelector("#twotabsearchtextbox");
 
-  await scribe.click("#twotabsearchtextbox");
+  await human.click("#twotabsearchtextbox");
 
-  await scribe.type("ysl myself largest most expensive bottle");
+  await human.type("ysl myself largest most expensive bottle");
 
-  await scribe.click("#nav-search-submit-button");
+  await human.click("#nav-search-submit-button");
 
   await page.waitForNavigation();
 
   for (let i = 1; i <= 5; i++) {
-    await scribe.click(`#a-autoid-${i}-announce`);
+    await human.click(`#a-autoid-${i}-announce`);
   }
 })();

@@ -1,6 +1,6 @@
 import path from "path";
 import puppeteer from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -12,21 +12,21 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   });
   const page = await browser.newPage();
 
-  const scribe = new Scribe(page, { visualize: true });
+  const human = new Humanizer(page, { visualize: true });
 
   const file = "file://" + path.join(__dirname, "local-demo.html");
   await page.goto(file);
   await sleep(1000);
 
-  await scribe.click("#b1");
+  await human.click("#b1");
   await sleep(500);
-  await scribe.click("#b2");
+  await human.click("#b2");
   await sleep(500);
-  await scribe.click("#b3");
+  await human.click("#b3");
   await sleep(500);
-  await scribe.click("#name");
+  await human.click("#name");
   // Slow (40 words/min) with frequent typos so it is easy to watch
-  await scribe.type("mobile phone under fifteen thousand", { wpm: 40, typoChance: 0.12 });
+  await human.type("mobile phone under fifteen thousand", { wpm: 40, typoChance: 0.12 });
 
   const keys: { key: string; gap: number }[] = await page.evaluate(() => (window as any).__keys);
   const gaps = keys.slice(1).map((k) => k.gap);

@@ -2,7 +2,7 @@
 (function () {
   var root = document.documentElement;
   var saved = null;
-  try { saved = localStorage.getItem("scribe-theme"); } catch (e) {}
+  try { saved = localStorage.getItem("gsa-theme"); } catch (e) {}
   var osDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   root.setAttribute("data-theme", saved === "light" || saved === "dark" ? saved : osDark ? "dark" : "light");
 
@@ -21,7 +21,7 @@
     btn.addEventListener("click", function () {
       var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
       root.setAttribute("data-theme", next);
-      try { localStorage.setItem("scribe-theme", next); } catch (e) {}
+      try { localStorage.setItem("gsa-theme", next); } catch (e) {}
       label();
     });
   });

@@ -12,7 +12,7 @@ interface MoveMouseOptions {
   log?: boolean;
 }
 
-interface ScribeOptions {
+interface HumanizerOptions {
   hesitationDelay: number;
   clickDelay: number;
   moveDelay: number;
@@ -46,12 +46,12 @@ interface ClickOptions {
   frame?: Frame;
 }
 
-export default class Scribe {
+export default class Humanizer {
   page: Page;
-  options: ScribeOptions;
+  options: HumanizerOptions;
   mouse: Point;
 
-  constructor(page: Page, options: Partial<ScribeOptions> = {}) {
+  constructor(page: Page, options: Partial<HumanizerOptions> = {}) {
     this.page = page;
 
     const {

@@ -9,7 +9,7 @@ atlas-credentials.env
 data-set.json
 
 # Scraped page captures
-puppeteer-scribe/ui/captures/
+search-automation/ui/captures/
 
 # Dependencies & environments
 node_modules/

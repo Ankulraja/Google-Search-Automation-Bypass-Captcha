@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Project Scribe",
+  title: "Mouse Data Collector",
 };
 
 export default function RootLayout({

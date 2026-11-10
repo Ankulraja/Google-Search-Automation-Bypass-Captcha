@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import Scribe from "../index";
+import Humanizer from "../index";
 
 const BRAVE = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser";
 const QUERY = process.env.QUERY || "mobile phone";
@@ -15,15 +15,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     args: ["--window-size=1400,900"],
   });
   const page = await browser.newPage();
-  const scribe = new Scribe(page, { visualize: true });
+  const human = new Humanizer(page, { visualize: true });
 
   console.log("1. Opening Google in Brave...");
   await page.goto("https://www.google.com", { waitUntil: "networkidle2" });
   await sleep(1500);
 
   console.log(`2. Moving mouse to the search box and typing "${QUERY}"...`);
-  await scribe.click('textarea[name="q"]');
-  await scribe.type(QUERY);
+  await human.click('textarea[name="q"]');
+  await human.type(QUERY);
   await sleep(500);
   await page.keyboard.press("Enter");
 
