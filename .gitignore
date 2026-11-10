@@ -1,0 +1,20 @@
+# Secrets / credentials
+*.env
+.env
+.env.*
+!.env.example
+atlas-credentials.env
+
+# Data dumps
+data-set.json
+
+# Scraped page captures
+puppeteer-scribe/ui/captures/
+
+# Dependencies & environments
+node_modules/
+.venv/
+.next/
+
+# OS files
+.DS_Store

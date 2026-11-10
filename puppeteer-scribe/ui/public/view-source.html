@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>view-source (parsed)</title>
+<style>
+:root{--bg:#fff;--fg:#1b1f24;--ln:#9aa0a6;--bar:#f1f3f4;--bd:#dadce0;--t:#881280;--a:#994500;--v:#1a1aa6;--c:#236e25;--x:#1b1f24;--acc:#1a73e8;--hl:rgba(255,213,0,.3)}
+@media (prefers-color-scheme:dark){:root{--bg:#202124;--fg:#e8eaed;--ln:#80868b;--bar:#2d2e31;--bd:#3c4043;--t:#5db0d7;--a:#9bbbdc;--v:#f29766;--c:#898989;--x:#e8eaed;--acc:#8ab4f8;--hl:rgba(255,213,0,.18)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.bar{position:sticky;top:0;z-index:1;background:var(--bar);border-bottom:1px solid var(--bd);padding:8px 14px;display:flex;flex-direction:column;gap:6px}
+.r{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.m{color:var(--ln)}
+a{color:var(--acc)}
+.seg a{padding:3px 10px;border:1px solid var(--bd);text-decoration:none;color:var(--fg)}
+.seg a:first-child{border-radius:5px 0 0 5px}.seg a:last-child{border-radius:0 5px 5px 0;border-left:0}
+.seg a.on{background:var(--acc);border-color:var(--acc);color:var(--bg);font-weight:600}
+select,input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:5px;padding:4px 6px;font:inherit}
+input[type=text]{width:220px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:5px;padding:4px 10px;font:inherit;cursor:pointer}
+table{border-collapse:collapse;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;width:100%}
+td.n{color:var(--ln);text-align:right;padding:0 12px 0 8px;vertical-align:top;user-select:none;border-right:1px solid var(--bd);width:1%;white-space:nowrap}
+td.n a{color:inherit;text-decoration:none}
+td.s{padding-right:12px;white-space:pre-wrap;word-break:break-word}
+body.nowrap td.s{white-space:pre;word-break:normal}
+tr:target,tr.hit{background:var(--hl)}
+.t{color:var(--t)}.a{color:var(--a)}.v{color:var(--v)}.c{color:var(--c);font-style:italic}.x{color:var(--x)}
+#msg{padding:30px;color:var(--ln)}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="r">
+    <span><b>view-source:</b> <span id="q"></span> <span id="tag" class="m"></span></span>
+    <span class="seg"><a class="on">Parsed</a><a id="rawLink">Raw (original)</a></span>
+    <span id="stats" class="m"></span>
+    <span style="flex:1"></span>
+    <button id="copy">Copy</button>
+    <button id="dl">Download parsed</button>
+    <a id="pageLink" target="_blank">View page ↗</a>
+    <a id="viewer">Open in viewer</a>
+  </div>
+  <div class="r">
+    <label>Section
+      <select id="section">
+        <option value="body">Whole page &lt;body&gt;</option>
+        <option value="html">Whole document &lt;html&gt;</option>
+        <option value="head">&lt;head&gt;</option>
+        <option value="#rso">Organic results (#rso)</option>
+        <option value="ads">Ads (#tads, #bottomads)</option>
+        <option value="paa">People also ask</option>
+        <option value="#botstuff">Related searches (#botstuff)</option>
+        <option value="custom">Custom CSS selector…</option>
+      </select>
+    </label>
+    <input id="sel" type="text" placeholder="e.g. #rso h3" hidden>
+    <label><input type="checkbox" id="hideCode" checked> Hide scripts/styles</label>
+    <label><input type="checkbox" id="cleanAttrs" checked> Hide JS/tracking attributes</label>
+    <label><input type="checkbox" id="hideEmpty" checked> Hide empty elements</label>
+    <label><input type="checkbox" id="wrap" checked> Line wrap</label>
+  </div>
+</div>
+<div id="msg">Loading and parsing…</div>
+<table id="out"></table>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const id = decodeURIComponent(location.pathname.split("/").pop());
+const params = new URLSearchParams(location.search);
+
+const VOIDS = new Set(["area","base","br","col","embed","hr","img","input","link","meta","source","track","wbr"]);
+const CODE_TAGS = new Set(["script","style","noscript","template"]);
+const NOISY_ATTR = /^(js[a-z]*|ping|nonce|style|data-ved|data-hveid|data-jsarwt|data-usg|data-lpage|data-async-[\w-]*|data-sokoban-[\w-]*|data-snf|data-snhf|data-sncf|data-snc|data-ri|data-rn|data-lb|data-ow|data-ts|data-ae|data-ia)$/i;
+const KEEP_EMPTY = new Set(["img","input","textarea","select","button","iframe","video","audio","canvas","svg","meta","link","title","base","br","hr"]);
+
+let doc, meta, lines = [], shown = 0, hiddenCode = 0, hiddenAttrs = 0;
+const opts = () => ({ hideCode: $("#hideCode").checked, cleanAttrs: $("#cleanAttrs").checked, hideEmpty: $("#hideEmpty").checked });
+
+function hasContent(el) {
+  return !!(el.textContent.trim() || el.querySelector("img,input,textarea,select,button,iframe,video,svg,a[href]"));
+}
+
+function emits(n, o) {
+  if (n.nodeType === 3) return !!n.textContent.trim();
+  if (n.nodeType === 8) return !o.hideCode;
+  if (n.nodeType !== 1) return false;
+  const tag = n.tagName.toLowerCase();
+  if (o.hideCode && CODE_TAGS.has(tag)) return false;
+  if (o.hideEmpty && n.closest("body") && !KEEP_EMPTY.has(tag) && !hasContent(n)) return false;
+  return true;
+}
+
+function openTag(el, o) {
+  const tag = el.tagName.toLowerCase();
+  let s = `&lt;<span class="t">${tag}</span>`;
+  for (const a of el.attributes) {
+    if (o.cleanAttrs && NOISY_ATTR.test(a.name)) { hiddenAttrs++; continue; }
+    const v = a.value.length > 200 ? a.value.slice(0, 200) + "…" : a.value;
+    s += ` <span class="a">${esc(a.name)}</span>` + (a.value !== "" ? `=<span class="v">"${esc(v)}"</span>` : "");
+  }
+  return s + "&gt;";
+}
+const closeTag = (tag) => `&lt;/<span class="t">${tag}</span>&gt;`;
+const textHtml = (t) => `<span class="x">${esc(t)}</span>`;
+const collapse = (s) => s.replace(/\s+/g, " ").trim();
+
+function walk(n, d, o) {
+  if (n.nodeType === 3) { lines.push([d, textHtml(collapse(n.textContent))]); return; }
+  if (n.nodeType === 8) { lines.push([d, `<span class="c">&lt;!-- ${esc(collapse(n.textContent).slice(0, 200))} --&gt;</span>`]); return; }
+  const tag = n.tagName.toLowerCase();
+  shown++;
+  const open = openTag(n, o);
+  if (VOIDS.has(tag)) { lines.push([d, open]); return; }
+  if (tag === "svg") { lines.push([d, open + `<span class="c">…</span>` + closeTag(tag)]); return; }
+  if (CODE_TAGS.has(tag)) {
+    const body = n.textContent;
+    lines.push([d, open + (body.trim() ? `<span class="c">/* ${body.length.toLocaleString()} chars */</span>` : "") + closeTag(tag)]);
+    return;
+  }
+  const kids = [...n.childNodes].filter((k) => emits(k, o));
+  if (!kids.length) { lines.push([d, open + closeTag(tag)]); return; }
+  if (kids.length === 1 && kids[0].nodeType === 3 && collapse(kids[0].textContent).length <= 140) {
+    lines.push([d, open + textHtml(collapse(kids[0].textContent)) + closeTag(tag)]);
+    return;
+  }
+  lines.push([d, open]);
+  kids.forEach((k) => walk(k, d + 1, o));
+  lines.push([d, closeTag(tag)]);
+}
+
+function commonAncestor(els) {
+  if (!els.length) return [];
+  let a = els[0];
+  while (a && !els.every((e) => a.contains(e))) a = a.parentElement;
+  return a ? [a] : [];
+}
+
+function roots() {
+  const v = $("#section").value;
+  if (v === "html") return [doc.documentElement];
+  if (v === "head") return [doc.head];
+  if (v === "body") return [doc.body];
+  if (v === "ads") return [...doc.querySelectorAll("#tads, #bottomads")];
+  if (v === "paa") {
+    // Find the "People also ask" heading, then climb to the box that holds its questions
+    const head = [...doc.querySelectorAll("[role=heading], h2, h3, span, div")].find((e) => e.children.length === 0 && /^people also ask$/i.test(e.textContent.trim()));
+    for (let a = head; a; a = a.parentElement) if (a.querySelectorAll("[data-q]").length >= 2) return [a];
+    return commonAncestor([...doc.querySelectorAll("[data-q]")]);
+  }
+  if (v === "custom") {
+    const q = $("#sel").value.trim();
+    if (!q) return [];
+    try { return [...doc.querySelectorAll(q)]; } catch { return null; }
+  }
+  return [...doc.querySelectorAll(v)];
+}
+
+function render() {
+  const o = opts();
+  lines = []; shown = 0; hiddenCode = 0; hiddenAttrs = 0;
+  hiddenCode = o.hideCode ? doc.querySelectorAll("script, style, noscript, template").length : 0;
+  const rs = roots();
+  if (rs === null) { $("#out").innerHTML = ""; $("#msg").hidden = false; $("#msg").textContent = "Invalid CSS selector."; return; }
+  rs.forEach((r, i) => {
+    if (rs.length > 1) lines.push([0, `<span class="c">&lt;!-- match ${i + 1} of ${rs.length} --&gt;</span>`]);
+    walk(r, 0, o);
+  });
+  $("#msg").hidden = !!lines.length;
+  $("#msg").textContent = lines.length ? "" : "Nothing found for this section on this page.";
+  $("#out").innerHTML = lines.map(([d, h], i) =>
+    `<tr id="L${i + 1}"><td class="n"><a href="#L${i + 1}">${i + 1}</a></td><td class="s" style="padding-left:calc(12px + ${d * 2}ch);text-indent:0">${h}</td></tr>`).join("");
+  const total = doc.getElementsByTagName("*").length;
+  $("#stats").textContent = `${lines.length.toLocaleString()} lines · ${shown.toLocaleString()} of ${total.toLocaleString()} elements shown` +
+    (o.hideCode ? ` · ${hiddenCode} script/style hidden` : "") + (o.cleanAttrs ? ` · ${hiddenAttrs.toLocaleString()} attributes hidden` : "");
+  if (location.hash) document.querySelector(location.hash)?.scrollIntoView({ block: "center" });
+}
+
+function plainText() {
+  return [...document.querySelectorAll("#out tr")].map((tr, i) => "  ".repeat(lines[i][0]) + tr.querySelector("td.s").textContent).join("\n");
+}
+
+(async () => {
+  try {
+    const [m, raw] = await Promise.all([
+      fetch(`/api/captures/${encodeURIComponent(id)}`).then((r) => { if (!r.ok) throw new Error("Capture not found"); return r.json(); }),
+      fetch(`/api/captures/${encodeURIComponent(id)}/raw`).then((r) => r.text()),
+    ]);
+    meta = m;
+    doc = new DOMParser().parseFromString(raw, "text/html"); // real HTML parse, scripts never run
+  } catch (e) { $("#msg").textContent = String(e.message || e); return; }
+
+  document.title = `view-source (parsed): ${meta.query}`;
+  $("#q").textContent = meta.query;
+  $("#tag").textContent = meta.tag ? `· ${meta.tag}` : "";
+  $("#rawLink").href = `/view-source/${encodeURIComponent(id)}?mode=raw`;
+  $("#viewer").href = `/source?id=${encodeURIComponent(id)}`;
+  $("#pageLink").href = `/view-page/${encodeURIComponent(id)}`;
+  if (params.get("section")) $("#section").value = params.get("section");
+
+  const rerender = () => {
+    $("#sel").hidden = $("#section").value !== "custom";
+    const u = new URL(location.href);
+    u.searchParams.set("section", $("#section").value);
+    u.hash = "";
+    history.replaceState(null, "", u);
+    render();
+  };
+  $("#section").onchange = () => { rerender(); if ($("#section").value === "custom") $("#sel").focus(); };
+  $("#sel").onkeydown = (e) => { if (e.key === "Enter") render(); };
+  ["hideCode", "cleanAttrs", "hideEmpty"].forEach((k) => ($("#" + k).onchange = render));
+  $("#wrap").onchange = () => document.body.classList.toggle("nowrap", !$("#wrap").checked);
+  $("#copy").onclick = async () => { await navigator.clipboard.writeText(plainText()); $("#copy").textContent = "Copied"; setTimeout(() => ($("#copy").textContent = "Copy"), 1200); };
+  $("#dl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([plainText()], { type: "text/html" }));
+    a.download = `${id}-parsed.html`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $("#sel").hidden = $("#section").value !== "custom";
+  render();
+})();
+</script>
+</body>
+</html>

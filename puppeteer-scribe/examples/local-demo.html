@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Scribe Local Demo</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #f4f4f5; height: 100vh; overflow: hidden; }
+    h1 { text-align: center; margin: 16px 0 0; }
+    p.hint { text-align: center; color: #555; margin: 4px 0; }
+    canvas { position: fixed; inset: 0; pointer-events: none; z-index: 9000; }
+    .btn { position: absolute; padding: 14px 22px; font-size: 18px; border: 0; border-radius: 8px; color: #fff; cursor: pointer; }
+    #b1 { left: 10%; top: 25%; background: #2563eb; }
+    #b2 { left: 75%; top: 35%; background: #16a34a; }
+    #b3 { left: 20%; top: 75%; background: #dc2626; }
+    #name { position: absolute; left: 55%; top: 70%; font-size: 18px; padding: 10px; width: 260px; }
+    #keylog { position: fixed; left: 12px; bottom: 12px; background: #fff; padding: 8px 12px; border-radius: 8px; font: 13px monospace; width: 260px; height: 260px; overflow: hidden; }
+    #log {position: fixed; right: 12px; bottom: 12px; background: #fff; padding: 8px 12px; border-radius: 8px; font-size: 14px; min-width: 200px; }
+  </style>
+</head>
+<body>
+  <h1>Scribe Local Demo</h1>
+  <p class="hint">Red line = the path the mouse actually took</p>
+  <button class="btn" id="b1">Button 1</button>
+  <button class="btn" id="b2">Button 2</button>
+  <button class="btn" id="b3">Button 3</button>
+  <input id="name" placeholder="Scribe types here...">
+  <div id="log"><b>Clicks:</b><div id="clicks"></div></div>
+  <div id="keylog"><b>Keystrokes (newest first):</b><div id="keys"></div></div>
+  <canvas id="trail"></canvas>
+  <script>
+    const c = document.getElementById('trail');
+    const ctx = c.getContext('2d');
+    c.width = innerWidth; c.height = innerHeight;
+    ctx.strokeStyle = 'red'; ctx.lineWidth = 2;
+    let last = null;
+    addEventListener('mousemove', e => {
+      if (last) { ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(e.clientX, e.clientY); ctx.stroke(); }
+      last = { x: e.clientX, y: e.clientY };
+    });
+    window.__keys = [];
+    let lastKey = null;
+    document.getElementById('name').addEventListener('keydown', e => {
+      const now = performance.now();
+      const gap = lastKey ? Math.round(now - lastKey) : 0;
+      lastKey = now;
+      window.__keys.push({ key: e.key, gap });
+      const d = document.createElement('div');
+      d.textContent = (e.key === 'Backspace' ? '⌫ (mistake fixed)' : `"${e.key}"`) + `  +${gap}ms`;
+      if (e.key === 'Backspace') d.style.color = '#dc2626';
+      const k = document.getElementById('keys');
+      k.prepend(d);
+    });
+    document.querySelectorAll('.btn').forEach(b => b.addEventListener('click', () => {
+      const d = document.createElement('div');
+      d.textContent = '✓ ' + b.textContent + ' clicked';
+      document.getElementById('clicks').appendChild(d);
+    }));
+  </script>
+</body>
+</html>

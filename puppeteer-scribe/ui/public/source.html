@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scribe – Page Source</title>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/style.css">
+<style>
+  main { display: grid; grid-template-columns: 280px 1fr; gap: 16px; height: calc(100vh - 50px); padding: 16px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } }
+  #list { overflow: auto; padding: 0; }
+  .cap { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .cap:hover { background: var(--code-bg); }
+  .cap.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .cap .q { font-weight: 600; }
+  .cap .m { font-size: 12px; color: var(--muted); }
+  .cap .vs { font-size: 12px; font-weight: 600; text-decoration: none; }
+  .cap .vs:hover { text-decoration: underline; }
+  #view { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; }
+  #head { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  #head h2 { margin: 0 0 4px; font-size: 16px; }
+  #head .m { font-size: 12px; color: var(--muted); word-break: break-all; }
+  #toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); gap: 8px; }
+  #toolbar .sep { width: 1px; height: 22px; background: var(--border); }
+  #find { width: 220px; padding: 6px 8px; }
+  #body { flex: 1; overflow: auto; min-height: 300px; background: var(--code-bg); }
+  #code { margin: 0; padding: 8px 0; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .l { display: flex; }
+  .l > i { flex: 0 0 64px; text-align: right; padding-right: 14px; color: var(--ln); font-style: normal; user-select: none; }
+  .l > span { white-space: pre-wrap; word-break: break-all; padding-right: 16px; min-width: 0; }
+  .l.hit { background: color-mix(in srgb, var(--mark) 35%, transparent); }
+  .l.cur { background: var(--mark); }
+  mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  .t { color: var(--tag); } .a { color: var(--attr); } .v { color: var(--str); } .c { color: var(--cmt); font-style: italic; }
+  iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+  #results { padding: 12px 16px; overflow: auto; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  /* Parsed page */
+  #parsed { padding: 14px 16px; display: grid; gap: 12px; background: var(--bg); min-height: 100%; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  .card summary { padding: 10px 14px; font-weight: 600; cursor: pointer; }
+  .card .cb { padding: 0 14px 12px; }
+  .card ul { margin: 0; padding-left: 20px; } .card li { margin: 3px 0; }
+  .kv th { width: 170px; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .kv td, .kv th { padding: 5px 8px; font-size: 13px; word-break: break-word; }
+  .kv td.u { font-size: 12px; word-break: break-all; }
+  .res { display: grid; grid-template-columns: 52px 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .res:last-child { border-bottom: 0; }
+  .rn { color: var(--muted); font-size: 12px; padding-top: 2px; }
+  .rs { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .rt { font-size: 15px; font-weight: 500; margin: 1px 0 3px; }
+  .rt a { text-decoration: none; } .rt a:hover { text-decoration: underline; }
+  .rp { font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips span { border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: 13px; }
+  /* DOM tree */
+  .tree-wrap { display: flex; height: 100%; min-height: 0; }
+  .tree-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tbar { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .tbar input { width: 320px; padding: 6px 8px; }
+  #tree { flex: 1; overflow: auto; padding: 8px 6px; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .n { white-space: nowrap; }
+  .k { padding-left: 16px; border-left: 1px dotted var(--border); margin-left: 6px; }
+  .tw { display: inline-block; width: 14px; color: var(--muted); cursor: pointer; user-select: none; }
+  .lbl { cursor: pointer; border-radius: 3px; padding: 0 2px; }
+  .lbl:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .lbl.sel { background: var(--mark); }
+  .cnt { color: var(--muted); }
+  .txt { white-space: normal; display: inline; color: var(--text); }
+  #det { width: 360px; flex: 0 0 360px; border-left: 1px solid var(--border); overflow: auto; padding: 12px 14px; background: var(--panel); }
+  #det h3 { margin: 0 0 8px; font: 600 14px ui-monospace, Menlo, monospace; color: var(--tag); }
+  .dl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 12px 0 4px; }
+  .path { display: block; word-break: break-all; font-size: 12px; }
+  .tc { font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  @media (max-width: 860px) { .tree-wrap { flex-direction: column; } #det { width: auto; flex: none; border-left: 0; border-top: 1px solid var(--border); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Scribe · Google search runner</h1>
+  <nav><a href="/">1. Run queries</a><a href="/source" class="active">2. Page source</a></nav>
+  <button class="theme-btn" id="themeBtn" type="button">
+    <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <span class="tl">Dark</span>
+  </button>
+</header>
+<main>
+  <aside class="panel" id="list"><div class="empty">Loading…</div></aside>
+  <section class="panel" id="view"><div class="empty">Select a capture on the left.</div></section>
+</main>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(2) + " MB" : (n / 1024).toFixed(1) + " KB";
+
+let captures = [], current = null, raw = "", mode = "parsed", doc = null;
+const opts = { pretty: true, hideScripts: false, find: "" };
+let hits = [], hitIdx = -1;
+
+async function loadList() {
+  captures = await (await fetch("/api/captures")).json();
+  const list = $("#list");
+  if (!captures.length) { list.innerHTML = `<div class="empty">No captures yet.<br><a href="/">Run a query</a> first.</div>`; return; }
+  list.innerHTML = captures.map((c) => `
+    <div class="cap" data-id="${esc(c.id)}">
+      <div class="q">${esc(c.query)}</div>
+      <div class="m">${c.browser === "chrome" ? "Chrome" : "Brave"} · ${c.device === "mobile" ? "Mobile" : "Desktop"} · ${c.mode === "incognito" ? "Incognito" : "Logged-in"}${c.profileName ? " (" + esc(c.profileName) + ")" : ""} · ${c.tag ? esc(c.tag) + " · " : ""}${new Date(c.capturedAt).toLocaleString()} · ${kb(c.bytes)}${c.captcha ? " · CAPTCHA" : ` · ${c.results.length} results`}</div>
+      <a class="vs" href="/view-page/${encodeURIComponent(c.id)}" target="_blank">View page ↗</a> · <a class="vs" href="/view-source/${encodeURIComponent(c.id)}" target="_blank">View source ↗</a>
+    </div>`).join("");
+  list.querySelectorAll("a.vs").forEach((a) => (a.onclick = (e) => e.stopPropagation()));
+  list.querySelectorAll(".cap").forEach((el) => (el.onclick = () => select(el.dataset.id)));
+  const want = new URLSearchParams(location.search).get("id");
+  select(captures.some((c) => c.id === want) ? want : (current?.id && captures.some((c) => c.id === current.id) ? current.id : captures[0].id));
+}
+
+async function select(id) {
+  current = captures.find((c) => c.id === id);
+  history.replaceState(null, "", "/source?id=" + encodeURIComponent(id));
+  document.querySelectorAll(".cap").forEach((el) => el.classList.toggle("sel", el.dataset.id === id));
+  raw = await (await fetch(`/api/captures/${encodeURIComponent(id)}/raw`)).text();
+  // Real HTML parse (DOMParser never runs the page's scripts)
+  doc = new DOMParser().parseFromString(raw, "text/html");
+  renderView();
+}
+
+function renderView() {
+  const c = current;
+  $("#view").innerHTML = `
+    <div id="head">
+      <h2>${esc(c.query)} ${c.tag ? `<span class="muted" style="font-weight:400">· ${esc(c.tag)}</span>` : ""}</h2>
+      <div class="m" title="${esc(c.url)}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.url)}</div>
+      <div class="m">Captured ${new Date(c.capturedAt).toLocaleString()} · ${kb(c.bytes)} · saved as <code>ui/captures/${esc(c.id)}.html</code></div>
+    </div>
+    <div id="toolbar" class="row">
+      <button data-mode="parsed">Parsed page</button>
+      <button data-mode="tree">DOM tree</button>
+      <button data-mode="source">Source</button>
+      <button data-mode="preview">Preview</button>
+      <button data-mode="results">Results (${c.results.length})</button>
+      <span class="sep"></span>
+      <span id="srcTools" class="row">
+        <button id="pretty">Format</button>
+        <button id="hide">Hide &lt;script&gt;/&lt;style&gt;</button>
+        <input id="find" type="text" placeholder="Find in source…" value="${esc(opts.find)}">
+        <button id="prev">↑</button><button id="next">↓</button>
+        <span id="count" class="muted" style="font-size:12px"></span>
+      </span>
+      <span style="flex:1"></span>
+      <a href="/view-page/${encodeURIComponent(c.id)}" target="_blank" style="font-weight:600">View page ↗</a>
+      <a href="/view-source/${encodeURIComponent(c.id)}" target="_blank" style="font-weight:600">View source ↗</a>
+      <button id="copy">Copy</button>
+      <button id="dl">Download</button>
+      <button id="del" title="Delete this capture">Delete</button>
+    </div>
+    <div id="body"></div>`;
+  $("#toolbar").querySelectorAll("[data-mode]").forEach((b) => (b.onclick = () => { mode = b.dataset.mode; renderBody(); }));
+  $("#pretty").onclick = () => { opts.pretty = !opts.pretty; renderBody(); };
+  $("#hide").onclick = () => { opts.hideScripts = !opts.hideScripts; renderBody(); };
+  let t; $("#find").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { opts.find = e.target.value; renderBody(); }, 250); };
+  $("#find").onkeydown = (e) => { if (e.key === "Enter") jump(e.shiftKey ? -1 : 1); };
+  $("#prev").onclick = () => jump(-1);
+  $("#next").onclick = () => jump(1);
+  $("#copy").onclick = async () => { await navigator.clipboard.writeText(sourceText()); flash($("#copy"), "Copied"); };
+  $("#dl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([raw], { type: "text/html" }));
+    a.download = `${c.id}.html`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $("#del").onclick = async () => {
+    if (!confirm(`Delete capture "${c.query}"?`)) return;
+    await fetch(`/api/captures/${encodeURIComponent(c.id)}`, { method: "DELETE" });
+    current = null; history.replaceState(null, "", "/source"); loadList();
+  };
+  renderBody();
+}
+
+function flash(btn, text) { const o = btn.textContent; btn.textContent = text; setTimeout(() => (btn.textContent = o), 1200); }
+
+const VOID = /^<(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr|!doctype)\b/i;
+function sourceText() {
+  let s = raw;
+  if (opts.hideScripts) {
+    s = s.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (m, a, body, b) => body.trim() ? `${a}/* ${body.length.toLocaleString()} chars hidden */${b}` : m)
+         .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, body, b) => body.trim() ? `${a}/* ${body.length.toLocaleString()} chars hidden */${b}` : m);
+  }
+  if (opts.pretty) {
+    const parts = s.replace(/>\s*</g, ">\n<").split("\n");
+    let depth = 0;
+    s = parts.map((line) => {
+      const l = line.trim();
+      if (/^<\//.test(l)) depth = Math.max(0, depth - 1);
+      const out = "  ".repeat(Math.min(depth, 40)) + l;
+      const opens = /^<[a-z]/i.test(l) && !VOID.test(l) && !/\/>$/.test(l) && !/^<([a-z0-9-]+)\b[\s\S]*<\/\1>$/i.test(l);
+      if (opens) depth++;
+      return out;
+    }).join("\n");
+  }
+  return s;
+}
+
+function highlight(line) {
+  // Light HTML colouring on an escaped line
+  return esc(line)
+    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="c">$1</span>')
+    .replace(/(&lt;\/?)([a-zA-Z][\w:-]*)/g, '$1<span class="t">$2</span>')
+    .replace(/(\s)([\w:@-]+)(=)(&quot;[^]*?&quot;)/g, '$1<span class="a">$2</span>$3<span class="v">$4</span>');
+}
+
+function renderBody() {
+  document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  $("#srcTools").style.display = mode === "source" ? "" : "none";
+  const body = $("#body");
+  if (mode === "preview") {
+    body.innerHTML = current.device === "mobile"
+      ? `<div style="flex:1;display:flex;justify-content:center;background:var(--bg);overflow:auto;padding:16px 0"><iframe sandbox="allow-popups allow-popups-to-escape-sandbox" style="flex:none;width:412px;height:100%;min-height:600px;border:1px solid var(--border);border-radius:18px" src="/view-page/${encodeURIComponent(current.id)}?bar=0&frame=1"></iframe></div>`
+      : `<iframe sandbox="allow-popups allow-popups-to-escape-sandbox" style="height:100%" src="/view-page/${encodeURIComponent(current.id)}?bar=0"></iframe>`;
+    body.style.display = "flex"; return;
+  }
+  body.style.display = "";
+  if (mode === "parsed") return renderParsed(body);
+  if (mode === "tree") return renderTree(body);
+  if (mode === "results") {
+    const r = current.results;
+    body.innerHTML = `<div id="results">${current.captcha ? `<p style="color:var(--warn)">Google showed a CAPTCHA for this query.</p>` : ""}
+      <table><thead><tr><th>#</th><th>Title</th><th>Site</th></tr></thead><tbody>
+      ${r.map((x, i) => `<tr><td class="muted">${i + 1}</td><td><a href="${esc(x.url)}" target="_blank" rel="noreferrer">${esc(x.title)}</a></td><td class="muted">${esc(x.site || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="muted">No results.</td></tr>`}
+      </tbody></table></div>`;
+    return;
+  }
+
+  $("#pretty").classList.toggle("on", opts.pretty);
+  $("#hide").classList.toggle("on", opts.hideScripts);
+  const lines = sourceText().split("\n");
+  const q = opts.find.toLowerCase();
+  hits = []; hitIdx = -1;
+  const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi") : null;
+  const html = lines.map((line, i) => {
+    let content;
+    if (re && line.toLowerCase().includes(q)) {
+      hits.push(i);
+      // escape around the matches so <mark> survives
+      let out = "", last = 0;
+      line.replace(re, (m, off) => { out += esc(line.slice(last, off)) + "<mark>" + esc(m) + "</mark>"; last = off + m.length; return m; });
+      content = out + esc(line.slice(last));
+      return `<div class="l hit" id="L${i}"><i>${i + 1}</i><span>${content}</span></div>`;
+    }
+    content = line.length > 20000 ? esc(line) : highlight(line);
+    return `<div class="l" id="L${i}"><i>${i + 1}</i><span>${content || " "}</span></div>`;
+  }).join("");
+  body.innerHTML = `<pre id="code">${html}</pre>`;
+  $("#count").textContent = q ? `${hits.length} line${hits.length === 1 ? "" : "s"}` : `${lines.length.toLocaleString()} lines`;
+  if (hits.length) jump(1);
+}
+
+// ================= Parsed page =================
+const txt = (el) => (el?.textContent || "").replace(/\s+/g, " ").trim();
+const abs = (h) => !h ? "" : h.startsWith("/") ? "https://www.google.com" + h : h;
+const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+
+function resultBlock(a, minExtra) {
+  let b = a;
+  const title = txt(a.querySelector("h3, [role=heading]"));
+  while (b.parentElement && !["rso", "search", "tads", "bottomads"].includes(b.parentElement.id) && txt(b).length < title.length + minExtra) b = b.parentElement;
+  return b;
+}
+
+function parsePage(d) {
+  const seen = new Set();
+  // Desktop: <h3> title links in #search. Mobile: role="heading" title links inside a [data-snc] block in #rso.
+  const desktopLinks = [...d.querySelectorAll("#search a:has(h3)")];
+  const resultLinks = desktopLinks.length ? desktopLinks : [...d.querySelectorAll("#rso a[href]:has([role=heading])")].filter((a) => a.closest("[data-snc]"));
+  const organic = resultLinks.filter((a) => !a.closest("#tads, #bottomads") && !seen.has(a.getAttribute("href")) && seen.add(a.getAttribute("href"))).map((a) => {
+    const b = a.closest("[jscontroller='SC7lYd'], [data-rpos], .MjjYud, [data-snc]") || resultBlock(a, 80);
+    const head = a.querySelector("h3") || a.querySelector("[role=heading]");
+    return {
+      title: txt(head),
+      href: abs(a.getAttribute("href")),
+      site: (txt(a.querySelector("cite")) || txt(b.querySelector("cite")) || txt(a).replace(txt(head), "").trim()).replace(/(\S)(https?:\/\/)/, "$1 · $2").slice(0, 90),
+      snippet: txt(b.querySelector(".VwiC3b")) || txt(b.querySelector("[data-sncf='1']")) || "",
+    };
+  });
+  const ads = [...d.querySelectorAll("#tads a, #bottomads a")].filter((a) => a.querySelector("[role=heading]")).map((a) => {
+    const b = resultBlock(a, 60);
+    let host = "";
+    try { host = new URL(a.getAttribute("data-pcu") || "").hostname; } catch {}
+    return {
+      where: a.closest("#tads") ? "Top" : "Bottom",
+      title: txt(a.querySelector("[role=heading]")),
+      site: host || txt(b.querySelector("cite")),
+      href: abs(a.getAttribute("data-pcu") || a.getAttribute("href")),
+      snippet: txt(b).replace(txt(a), "").slice(0, 300),
+    };
+  });
+  const paa = uniq([...d.querySelectorAll("[data-q]")].map((e) => e.getAttribute("data-q")));
+  const related = uniq([...d.querySelectorAll("#botstuff a[href*='/search?']")].map(txt).filter((t) => t.length < 100));
+  const headings = [...d.querySelectorAll("h1, h2, h3")].map((h) => ({ tag: h.tagName.toLowerCase(), text: txt(h) })).filter((h) => h.text);
+  const links = [...d.querySelectorAll("a[href]")].map((a) => ({ text: txt(a).slice(0, 120), href: abs(a.getAttribute("href")) }));
+  const scripts = [...d.querySelectorAll("script")];
+  const styles = [...d.querySelectorAll("style")];
+  return {
+    organic, ads, paa, related, headings, links,
+    overview: {
+      "Title": txt(d.querySelector("title")),
+      "Language": d.documentElement.getAttribute("lang") || "—",
+      "Meta description": d.querySelector("meta[name=description]")?.getAttribute("content") || "—",
+      "Total elements": d.getElementsByTagName("*").length.toLocaleString(),
+      "Links": links.length.toLocaleString(),
+      "Images": d.querySelectorAll("img").length.toLocaleString(),
+      "Scripts": `${scripts.length} (${kb(scripts.reduce((n, s) => n + s.textContent.length, 0))} inline)`,
+      "Styles": `${styles.length} (${kb(styles.reduce((n, s) => n + s.textContent.length, 0))})`,
+      "Iframes": d.querySelectorAll("iframe").length,
+      "Forms / inputs": `${d.querySelectorAll("form").length} / ${d.querySelectorAll("input, textarea").length}`,
+    },
+  };
+}
+
+function card(title, count, inner, open = true) {
+  return `<details class="card" ${open ? "open" : ""}><summary>${esc(title)} <span class="muted">(${count})</span></summary><div class="cb">${inner}</div></details>`;
+}
+
+function renderParsed(body) {
+  const p = parsePage(doc);
+  const link = (h, t) => `<a href="${esc(h)}" target="_blank" rel="noreferrer">${esc(t || h)}</a>`;
+  const none = `<p class="muted">None found on this page.</p>`;
+  body.innerHTML = `<div id="parsed">
+    ${card("Overview", Object.keys(p.overview).length, `<table class="kv">${Object.entries(p.overview).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>`)}
+    ${card("Organic results", p.organic.length, p.organic.length ? p.organic.map((r, i) => `
+      <div class="res"><div class="rn">${i + 1}</div><div>
+        <div class="rs">${esc(r.site)}</div>
+        <div class="rt">${link(r.href, r.title)}</div>
+        ${r.snippet ? `<div class="rp">${esc(r.snippet)}</div>` : ""}
+      </div></div>`).join("") : none)}
+    ${card("Sponsored (ads)", p.ads.length, p.ads.length ? p.ads.map((r, i) => `
+      <div class="res"><div class="rn">${r.where}</div><div>
+        <div class="rs">${esc(r.site)}</div>
+        <div class="rt">${link(r.href, r.title)}</div>
+        ${r.snippet ? `<div class="rp">${esc(r.snippet)}</div>` : ""}
+      </div></div>`).join("") : none)}
+    ${card("People also ask", p.paa.length, p.paa.length ? `<ul>${p.paa.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : none)}
+    ${card("Related searches", p.related.length, p.related.length ? `<div class="chips">${p.related.map((q) => `<span>${esc(q)}</span>`).join("")}</div>` : none)}
+    ${card("Headings", p.headings.length, p.headings.length ? `<ul>${p.headings.map((h) => `<li><code class="muted">${h.tag}</code> ${esc(h.text)}</li>`).join("")}</ul>` : none, false)}
+    ${card("All links", p.links.length, `<table class="kv">${p.links.map((l) => `<tr><td>${esc(l.text || "—")}</td><td class="u">${link(l.href)}</td></tr>`).join("")}</table>`, false)}
+  </div>`;
+}
+
+// ================= DOM tree =================
+let rowOf = new WeakMap(), selRow = null, selMatches = [], selIdx = -1;
+
+function attrsHtml(el) {
+  return [...el.attributes].map((a) => {
+    const v = a.value.length > 80 ? a.value.slice(0, 80) + "…" : a.value;
+    return ` <span class="a">${esc(a.name)}</span>${a.value !== "" ? `=<span class="v">"${esc(v)}"</span>` : ""}`;
+  }).join("");
+}
+const kids = (n) => [...n.childNodes].filter((c) => c.nodeType === 1 || c.nodeType === 8 || (c.nodeType === 3 && c.textContent.trim()));
+
+function makeRow(node) {
+  const row = document.createElement("div");
+  row.className = "n";
+  rowOf.set(node, row);
+  if (node.nodeType === 3) {
+    const t = node.textContent.trim().replace(/\s+/g, " ");
+    const isCode = /^(script|style)$/i.test(node.parentNode?.nodeName || "");
+    row.innerHTML = `<span class="tw"></span><span class="txt">${isCode ? `<span class="muted">… ${t.length.toLocaleString()} chars of ${node.parentNode.nodeName.toLowerCase()}</span>` : `"${esc(t.length > 240 ? t.slice(0, 240) + "…" : t)}"`}</span>`;
+    return row;
+  }
+  if (node.nodeType === 8) { row.innerHTML = `<span class="tw"></span><span class="c">&lt;!-- ${esc(node.textContent.trim().slice(0, 120))} --&gt;</span>`; return row; }
+  const tag = node.tagName.toLowerCase();
+  const ch = kids(node);
+  row.innerHTML = `<span class="tw">${ch.length ? "▸" : ""}</span><span class="lbl">&lt;<span class="t">${tag}</span>${attrsHtml(node)}&gt;<span class="cnt">${ch.length ? `…${ch.length}…&lt;/${tag}&gt;` : `&lt;/${tag}&gt;`}</span></span><div class="k" hidden></div>`;
+  row.querySelector(".tw").onclick = (e) => { e.stopPropagation(); toggle(node); };
+  row.querySelector(".lbl").onclick = (e) => { e.stopPropagation(); selectNode(node); };
+  row.querySelector(".lbl").ondblclick = (e) => { e.stopPropagation(); toggle(node); };
+  return row;
+}
+
+function expand(node, open = true) {
+  const row = rowOf.get(node);
+  if (!row || node.nodeType !== 1) return;
+  const box = row.querySelector(":scope > .k");
+  const ch = kids(node);
+  if (!ch.length) return;
+  if (open && !box.childElementCount) ch.forEach((c) => box.appendChild(makeRow(c)));
+  box.hidden = !open;
+  row.querySelector(":scope > .tw").textContent = open ? "▾" : "▸";
+  row.querySelector(":scope > .lbl > .cnt").style.display = open ? "none" : "";
+}
+const toggle = (node) => expand(node, rowOf.get(node).querySelector(":scope > .k").hidden);
+
+function cssPath(el) {
+  const parts = [];
+  for (let e = el; e && e.nodeType === 1 && e !== doc.documentElement; e = e.parentElement) {
+    if (e.id) { parts.unshift("#" + e.id); break; }
+    let s = e.tagName.toLowerCase();
+    const sib = e.parentElement ? [...e.parentElement.children].filter((x) => x.tagName === e.tagName) : [];
+    if (sib.length > 1) s += `:nth-of-type(${sib.indexOf(e) + 1})`;
+    parts.unshift(s);
+  }
+  return parts.join(" > ");
+}
+
+function reveal(node) {
+  const chain = [];
+  for (let e = node.parentElement; e; e = e.parentElement) chain.unshift(e);
+  chain.forEach((e) => expand(e, true));
+}
+
+function selectNode(node, scroll) {
+  selRow?.querySelector(":scope > .lbl")?.classList.remove("sel");
+  reveal(node);
+  selRow = rowOf.get(node);
+  const lbl = selRow.querySelector(":scope > .lbl");
+  lbl.classList.add("sel");
+  if (scroll) {
+    const tree = $("#tree");
+    lbl.scrollIntoView({ block: "center", inline: "nearest" });
+    // keep the start of the row (indent + tag) visible instead of scrolling sideways
+    tree.scrollLeft = Math.max(0, lbl.getBoundingClientRect().left - tree.getBoundingClientRect().left + tree.scrollLeft - 80);
+  }
+  const text = txt(node);
+  $("#det").innerHTML = `
+    <h3>&lt;${node.tagName.toLowerCase()}&gt;</h3>
+    <div class="dl">CSS path</div><code class="path">${esc(cssPath(node))}</code>
+    <div class="dl">Attributes (${node.attributes.length})</div>
+    ${node.attributes.length ? `<table class="kv">${[...node.attributes].map((a) => `<tr><th>${esc(a.name)}</th><td>${esc(a.value)}</td></tr>`).join("")}</table>` : `<p class="muted">None</p>`}
+    <div class="dl">Stats</div>
+    <table class="kv"><tr><th>Children</th><td>${node.children.length}</td></tr><tr><th>Descendants</th><td>${node.getElementsByTagName("*").length.toLocaleString()}</td></tr><tr><th>Links inside</th><td>${node.querySelectorAll("a[href]").length}</td></tr><tr><th>HTML size</th><td>${kb(node.outerHTML.length)}</td></tr></table>
+    <div class="dl">Text content (${text.length.toLocaleString()} chars)</div>
+    <div class="tc">${esc(text.slice(0, 3000))}${text.length > 3000 ? "…" : ""}</div>
+    <div class="row" style="margin-top:10px"><button id="cpHtml">Copy outer HTML</button><button id="cpPath">Copy CSS path</button></div>`;
+  $("#cpHtml").onclick = async () => { await navigator.clipboard.writeText(node.outerHTML); flash($("#cpHtml"), "Copied"); };
+  $("#cpPath").onclick = async () => { await navigator.clipboard.writeText(cssPath(node)); flash($("#cpPath"), "Copied"); };
+}
+
+function renderTree(body) {
+  rowOf = new WeakMap(); selRow = null; selMatches = []; selIdx = -1;
+  body.innerHTML = `<div class="tree-wrap">
+    <div class="tree-main">
+      <div class="row tbar"><input id="sel" type="text" placeholder="CSS selector, e.g.  #rso h3   [data-q]   #tads a"><button id="selGo">Find</button><button id="selPrev">↑</button><button id="selNext">↓</button><span id="selCount" class="muted" style="font-size:12px"></span></div>
+      <div id="tree"><div class="n muted">&lt;!DOCTYPE ${esc(doc.doctype?.name || "html")}&gt;</div></div>
+    </div>
+    <aside id="det"><p class="muted">Click an element to see its attributes, CSS path and text.</p></aside>
+  </div>`;
+  const root = doc.documentElement;
+  $("#tree").appendChild(makeRow(root));
+  expand(root);
+  if (doc.body) expand(doc.body);
+  const step = (dir) => {
+    if (!selMatches.length) return;
+    selIdx = (selIdx + dir + selMatches.length) % selMatches.length;
+    selectNode(selMatches[selIdx], true);
+    $("#selCount").textContent = `${selIdx + 1} / ${selMatches.length}`;
+  };
+  const go = () => {
+    const q = $("#sel").value.trim();
+    if (!q) return;
+    try { selMatches = [...doc.querySelectorAll(q)]; } catch { $("#selCount").textContent = "Invalid selector"; return; }
+    selIdx = -1;
+    $("#selCount").textContent = selMatches.length ? "" : "No matches";
+    step(1);
+  };
+  $("#selGo").onclick = go;
+  let lastQ = "";
+  $("#sel").onkeydown = (e) => {
+    if (e.key !== "Enter") return;
+    const q = $("#sel").value.trim();
+    if (q !== lastQ) { lastQ = q; go(); } else step(e.shiftKey ? -1 : 1);
+  };
+  $("#selPrev").onclick = () => step(-1);
+  $("#selNext").onclick = () => step(1);
+}
+
+function jump(dir) {
+  if (!hits.length) return;
+  document.querySelector(".l.cur")?.classList.remove("cur");
+  hitIdx = (hitIdx + dir + hits.length) % hits.length;
+  const el = document.getElementById("L" + hits[hitIdx]);
+  el.classList.add("cur");
+  el.scrollIntoView({ block: "center" });
+  $("#count").textContent = `${hitIdx + 1} / ${hits.length} lines`;
+}
+
+loadList();
+</script>
+</body>
+</html>
