@@ -24,7 +24,7 @@
   /* Browser: segmented, two equal halves */
   .seg { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
   .seg input { position: absolute; opacity: 0; pointer-events: none; }
-  .seg label { display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background .15s, color .15s; }
+  .seg label { display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; transition: background .15s, color .15s; }
   .seg label:last-of-type { border-left: 1px solid var(--border); }
   .seg input:checked + label { background: var(--accent); color: var(--accent-text); font-weight: 600; }
   .seg input:disabled + label { opacity: .4; cursor: not-allowed; }
@@ -77,8 +77,15 @@
       <div class="field">
         <span class="cap">Device</span>
         <div class="seg ctl" role="radiogroup" aria-label="Device">
-          <input type="radio" name="device" id="dv-desktop" value="desktop" checked><label for="dv-desktop">Desktop</label>
-          <input type="radio" name="device" id="dv-mobile" value="mobile"><label for="dv-mobile">Mobile</label>
+          <input type="radio" name="device" id="dv-mobile" value="mobile" checked><label for="dv-mobile">Mobile</label>
+          <input type="radio" name="device" id="dv-desktop" value="desktop"><label for="dv-desktop">Desktop</label>
+        </div>
+      </div>
+      <div class="field">
+        <span class="cap">Window</span>
+        <div class="seg ctl" role="radiogroup" aria-label="Window">
+          <input type="radio" name="window" id="wn-headless" value="headless" checked><label for="wn-headless" title="The browser runs in the background with no window">Headless</label>
+          <input type="radio" name="window" id="wn-headed" value="headed"><label for="wn-headed" title="A visible browser window opens and you can watch the search">Headed</label>
         </div>
       </div>
       <div class="field full">
@@ -101,10 +108,13 @@
   <section class="panel">
     <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
       <h2 style="margin:0">Runs <span id="state" class="muted" style="font-weight:400"></span></h2>
-      <button id="clear">Clear finished</button>
+      <div class="row" style="gap:8px">
+        <button id="pauseQ" title="The running keyword finishes, the rest wait until you resume">Pause queue</button>
+        <button id="clear">Clear finished</button>
+      </div>
     </div>
     <table>
-      <thead><tr><th>#</th><th>Browser / Device / Mode</th><th>Tag</th><th>Query</th><th>Status</th><th>Results</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Browser / Device / Mode</th><th>Tag</th><th>Query</th><th>Status</th><th>Saved</th><th></th></tr></thead>
       <tbody id="jobs"><tr><td colspan="7" class="muted">No runs yet.</td></tr></tbody>
     </table>
   </section>
@@ -118,7 +128,7 @@ $("#run").onclick = async () => {
   if (!queries.trim()) { $("#msg").textContent = "Enter at least one query."; return; }
   $("#run").disabled = true;
   try {
-    const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queries, mode: currentMode(), browser: currentBrowser(), device: currentDevice(), profile: currentMode() === "logged-in" ? $("#profile").value : undefined }) });
+    const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queries, mode: currentMode(), browser: currentBrowser(), device: currentDevice(), headless: currentWindow() === "headless", freshBrowser: true, profile: currentMode() === "logged-in" ? $("#profile").value : undefined }) });
     const d = await r.json();
     $("#msg").textContent = d.error || `Queued ${d.added} quer${d.added === 1 ? "y" : "ies"}.`;
     if (!d.error) $("#q").value = "";
@@ -127,20 +137,43 @@ $("#run").onclick = async () => {
   refresh();
 };
 $("#clear").onclick = async () => { await fetch("/api/jobs/clear", { method: "POST" }); refresh(); };
+let queuePaused = false;
+$("#pauseQ").onclick = async () => { await fetch(`/api/queue/${queuePaused ? "resume" : "pause"}`, { method: "POST" }); refresh(); };
+// Per-run buttons (event delegation, the table is re-rendered every 1.5 s)
+$("#jobs").onclick = async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  if (b.dataset.act === "cancel" && !confirm("Stop this search now? Nothing will be saved for it.")) return;
+  b.disabled = true;
+  const r = await fetch(`/api/jobs/${b.dataset.id}/${b.dataset.act}`, { method: "POST" });
+  if (!r.ok) alert((await r.json().catch(() => ({}))).error || "Action failed");
+  refresh();
+};
+const jobActions = (j) => {
+  const btn = (act, label, title) => `<button class="mini" data-act="${act}" data-id="${j.id}" title="${title}">${label}</button>`;
+  if (j.status === "queued") return btn("pause", "Pause", "Hold this keyword in the queue") + btn("delete", "Delete", "Remove from the queue");
+  if (j.status === "paused") return btn("resume", "Resume", "Put back in the queue") + btn("delete", "Delete", "Remove from the queue");
+  if (j.status === "running") return btn("cancel", "Stop", "Stop this search now");
+  return btn("delete", "Delete", "Remove from this list (the saved page is kept)");
+};
 
 async function refresh() {
   try {
-    const { working, jobs } = await (await fetch("/api/jobs")).json();
-    $("#state").textContent = working ? "· Brave is running…" : "";
+    const d = await (await fetch("/api/jobs")).json();
+    const { working, jobs } = d;
+    queuePaused = d.queuePaused;
+    const waiting = jobs.filter((j) => j.status === "queued").length;
+    $("#pauseQ").textContent = queuePaused ? "Resume queue" : "Pause queue";
+    $("#state").textContent = queuePaused ? `· Queue paused${waiting ? ` (${waiting} waiting)` : ""}${working ? ", finishing the current search…" : ""}` : working ? "· Running…" : "";
     $("#jobs").innerHTML = jobs.length ? jobs.slice().reverse().map((j) => `
       <tr>
         <td class="muted">${j.id}</td>
-        <td><span class="bb">${j.browser === "brave" ? "Brave" : "Chrome"}</span><span class="bb">${j.device === "mobile" ? "Mobile" : "Desktop"}</span><span class="mb ${j.mode}">${j.mode === "incognito" ? "Incognito" : "Logged-in"}</span>${j.profileName ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(j.profileName)}</div>` : ""}</td>
+        <td><span class="bb">${j.browser === "brave" ? "Brave" : "Chrome"}</span><span class="bb">${j.device === "mobile" ? "Mobile" : "Desktop"}</span><span class="bb">${j.headless ? "Headless" : "Headed"}</span><span class="mb ${j.mode}">${j.mode === "incognito" ? "Incognito" : "Logged-in"}</span>${j.profileName ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(j.profileName)}</div>` : ""}</td>
         <td>${esc(j.tag || "—")}</td>
         <td>${esc(j.query)}</td>
-        <td><span class="badge s-${j.status}">${j.status}</span>${j.error ? `<div class="muted" style="font-size:12px">${esc(j.error)}</div>` : ""}${j.note ? `<div class="s-captcha" style="font-size:12px">${esc(j.note)}</div>` : ""}</td>
-        <td>${j.resultCount ?? "—"}</td>
-        <td style="white-space:nowrap">${j.captureId ? `<a href="/view-page/${encodeURIComponent(j.captureId)}" target="_blank">View page ↗</a> · <a href="/view-source/${encodeURIComponent(j.captureId)}" target="_blank">View source ↗</a> · <a href="/source?id=${encodeURIComponent(j.captureId)}">Parsed</a>` : ""}</td>
+        <td><span class="badge s-${j.status}">${j.status}</span>${j.pass > 1 || j.history.length > 1 ? `<div class="muted" style="font-size:12px">Pass ${j.pass} of 3${j.history.length ? " · " + j.history.map((h) => h.status).join(" → ") : ""}</div>` : ""}${j.error ? `<div class="muted" style="font-size:12px">${esc(j.error)}</div>` : ""}${j.note ? `<div class="s-captcha" style="font-size:12px">${esc(j.note)}</div>` : ""}</td>
+        <td>${j.bytes ? (j.bytes / 1048576).toFixed(2) + " MB" : "—"}</td>
+        <td style="white-space:nowrap">${j.captureId ? `<a href="/view-page/${encodeURIComponent(j.captureId)}" target="_blank">View page ↗</a> · <a href="/view-source/${encodeURIComponent(j.captureId)}" target="_blank">View source ↗</a> · <a href="/source?id=${encodeURIComponent(j.captureId)}">Parsed</a>` : ""}<div class="acts">${jobActions(j)}</div></td>
       </tr>`).join("") : `<tr><td colspan="7" class="muted">No runs yet.</td></tr>`;
   } catch {}
 }
@@ -162,12 +195,17 @@ const showMode = () => {
   $("#modeState").textContent = m === "incognito" ? "Incognito" : "Logged-In";
   $("#modeBox").title = HINTS[m];
 };
-$("#modeToggle").checked = true; // Incognito by default
+// Defaults: Chrome · Mobile · Headless · Incognito (set here too, so a page refresh does not bring back old choices)
+$("#br-chrome").checked = true;
+$("#dv-mobile").checked = true;
+$("#wn-headless").checked = true;
+$("#modeToggle").checked = true;
 $("#modeToggle").onchange = () => { showMode(); updateProfiles(); };
 
 // ----- Browser selector + profile list -----
 let browsers = [];
 const currentDevice = () => document.querySelector('input[name="device"]:checked').value;
+const currentWindow = () => document.querySelector('input[name="window"]:checked').value;
 const currentBrowser = () => document.querySelector('input[name="browser"]:checked').value;
 function updateProfiles() {
   const b = browsers.find((x) => x.id === currentBrowser());

@@ -5,6 +5,7 @@ import path from "path";
 import { execSync } from "child_process";
 import puppeteer, { Browser, Page } from "puppeteer";
 import Humanizer from "../index";
+import { deleteRun, indexCapture, keywordReport, syncCaptures } from "./db";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
@@ -30,7 +31,7 @@ fs.mkdirSync(CAPTURES, { recursive: true });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Status = "queued" | "running" | "done" | "captcha" | "error";
+type Status = "queued" | "paused" | "running" | "done" | "captcha" | "error" | "cancelled";
 type Mode = "logged-in" | "incognito";
 type Device = "desktop" | "mobile";
 interface Job {
@@ -40,32 +41,61 @@ interface Job {
   profile?: string; // profile folder for logged-in mode, e.g. "Default" or "Profile 2"
   profileName?: string;
   device: Device;
+  headless: boolean; // true = no visible browser window
+  freshBrowser: boolean; // true = open a new browser for this keyword and close it afterwards
+  cancelRequested?: boolean;
+  pass: number; // 1 = first try; a CAPTCHA keyword is retried in pass 2 and 3
+  seq: number; // queue order; a retry gets a new (later) number so it runs after the rest of the batch
+  history: { pass: number; status: Status; captureId?: string }[]; // result of every pass
+  replaceId?: string; // "Run again": overwrite this existing capture instead of adding a new one
   tag?: string; // optional leading number, e.g. an MCAT id
   query: string;
   status: Status;
   captureId?: string;
-  resultCount?: number;
+  bytes?: number;
   error?: string;
   note?: string;
 }
+// <id>.html holds the page source. <id>.json holds only what the source cannot tell us:
+// how, when and with what browser setup the search was run. Everything else is parsed from the source later.
 interface Capture {
   id: string;
+  schema?: number; // 2 = source-only capture (no parsed results stored)
+  // What was searched
+  query: string;
+  tag?: string;
+  // How it was run
   mode?: Mode; // older captures have none (they were logged-in Brave)
   browser?: BrowserKind;
+  browserVersion?: string;
   profileName?: string;
   device?: Device; // older captures: desktop
-  tag?: string;
-  query: string;
-  url: string;
+  headless?: boolean; // older captures: headed (visible window)
+  userAgent?: string;
+  viewport?: { width: number; height: number; deviceScaleFactor: number; isMobile: boolean };
+  locale?: { language: string; languages: string[]; timezone: string };
+  // When
+  startedAt?: string;
   capturedAt: string;
-  bytes: number;
+  timing?: { totalMs: number; resultsLoadMs: number };
+  // What came back
+  url: string; // final URL after redirects
+  httpStatus?: number;
+  redirects?: string[];
   captcha: boolean;
-  results: { title: string; url: string; site: string; snippet?: string }[];
+  pageHeight?: number; // rendered height in px (depends on the viewport, not in the source)
+  bytes: number;
+  /** Older captures only. Results are now parsed from the source. */
+  results?: { title: string; url: string; site: string; snippet?: string }[];
 }
 
 const jobs: Job[] = [];
 let nextJobId = 1;
+let nextSeq = 1;
+const MAX_PASSES = 3; // a keyword that keeps hitting a CAPTCHA is tried at most this many times
 let working = false;
+let queuePaused = false; // Pause queue: the running keyword finishes, the rest wait
+let activePage: Page | undefined; // page of the running keyword, closed to cancel it
 
 // ---------- Browsers & profiles ----------
 interface ProfileInfo { dir: string; name: string; email?: string }
@@ -130,11 +160,11 @@ function checkInstalled(kind: BrowserKind) {
 }
 
 // Logged-in: a copy of your real browser profile (cookies, Google sign-in, extensions)
-function launchLoggedIn(kind: BrowserKind, profile: string) {
+function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean) {
   checkInstalled(kind);
   return puppeteer.launch({
     executablePath: BROWSERS[kind].exe,
-    headless: false,
+    headless,
     defaultViewport: null,
     userDataDir: BROWSERS[kind].copy,
     ignoreDefaultArgs: COMMON_IGNORE,
@@ -143,11 +173,11 @@ function launchLoggedIn(kind: BrowserKind, profile: string) {
 }
 
 // Incognito: a brand-new empty profile that is deleted afterwards; each query uses its own private context
-function launchIncognito(kind: BrowserKind, tmpDir: string) {
+function launchIncognito(kind: BrowserKind, tmpDir: string, headless: boolean) {
   checkInstalled(kind);
   return puppeteer.launch({
     executablePath: BROWSERS[kind].exe,
-    headless: false,
+    headless,
     defaultViewport: null,
     userDataDir: tmpDir,
     ignoreDefaultArgs: COMMON_IGNORE,
@@ -156,32 +186,6 @@ function launchIncognito(kind: BrowserKind, tmpDir: string) {
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
-
-// Organic results for both layouts. Runs inside the page.
-// Desktop: links with an <h3> title in #search. Mobile: links with a role="heading" title inside a [data-snc] result block in #rso.
-function extractResults() {
-  const t = (e: Element | null | undefined) => (e?.textContent || "").replace(/\s+/g, " ").trim();
-  const seen = new Set<string>();
-  const out: { title: string; url: string; site: string; snippet: string }[] = [];
-  const desktop = [...document.querySelectorAll("#search a:has(h3)")];
-  const links = desktop.length
-    ? desktop
-    : [...document.querySelectorAll("#rso a[href]:has([role=heading])")].filter((a) => a.closest("[data-snc]"));
-  for (const a of links as HTMLAnchorElement[]) {
-    if (a.closest("#tads, #bottomads") || seen.has(a.href)) continue;
-    seen.add(a.href);
-    const head = a.querySelector("h3") || a.querySelector("[role=heading]");
-    const block = a.closest("[jscontroller='SC7lYd'], [data-rpos], .MjjYud, [data-snc]") || a.parentElement;
-    const title = t(head);
-    out.push({
-      title,
-      url: a.href,
-      site: (t(a.querySelector("cite")) || t(block?.querySelector("cite")) || t(a).replace(title, "").trim()).replace(/(\S)(https?:\/\/)/, "$1 · $2").slice(0, 90),
-      snippet: t(block?.querySelector(".VwiC3b")),
-    });
-  }
-  return out;
-}
 
 // Mobile: present as a current Android phone (Pixel 8 size, touch, mobile UA + client hints)
 const MOBILE = { width: 412, height: 915, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true };
@@ -209,46 +213,77 @@ async function runJob(browser: Browser, job: Job) {
   // Incognito: every query gets its own private (off-the-record) context, thrown away afterwards
   const ctx = job.mode === "incognito" ? await browser.createBrowserContext() : undefined;
   const page = ctx ? await ctx.newPage() : await browser.newPage();
+  activePage = page;
   if (job.device === "mobile") await emulateMobile(page, browser);
+  // Headless Chrome announces itself as "HeadlessChrome" in its user agent; present the normal Chrome one instead
+  else if (job.headless) await page.setUserAgent((await browser.userAgent()).replace("HeadlessChrome", "Chrome"));
   try {
+    const started = Date.now();
     const human = new Humanizer(page, { visualize: true });
     await page.goto("https://www.google.com", { waitUntil: "networkidle2" });
     await sleep(1000);
     await human.click('textarea[name="q"], input[name="q"]');
     await human.type(job.query);
     await sleep(400);
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {}),
+    const submitted = Date.now();
+    const [response] = await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => null),
       page.keyboard.press("Enter"),
     ]);
     await page.waitForSelector("#search", { timeout: 10000 }).catch(() => {});
+    const loaded = Date.now();
     await sleep(1500);
 
-    const captcha = page.url().includes("/sorry/");
-    const results = captcha ? [] : await page.evaluate(extractResults);
+    // Only the page source + facts the source cannot tell us. No parsing here.
     const html = await page.content();
+    const env = await page.evaluate(() => ({
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      languages: [...navigator.languages],
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      deviceScaleFactor: window.devicePixelRatio,
+      pageHeight: document.documentElement.scrollHeight,
+    }));
 
-    const id = `${Date.now()}-${slug(job.query)}`;
+    // One entry per keyword run: a CAPTCHA retry (pass 2/3) overwrites this job's own earlier capture, and
+    // "Run again" overwrites the capture it was started from. Only a first, fresh run creates a new entry.
+    const reuse = [job.captureId, job.replaceId].find((x): x is string => !!x && validId(x));
+    const id = reuse ?? `${Date.now()}-${slug(job.query)}`;
     const meta: Capture = {
       id,
+      schema: 2,
+      query: job.query,
+      tag: job.tag,
       mode: job.mode,
       browser: job.browser,
-      device: job.device,
+      browserVersion: await browser.version(),
       profileName: job.profileName,
-      tag: job.tag,
-      query: job.query,
-      url: page.url(),
+      device: job.device,
+      headless: job.headless,
+      userAgent: env.userAgent,
+      viewport: { width: env.width, height: env.height, deviceScaleFactor: env.deviceScaleFactor, isMobile: job.device === "mobile" },
+      locale: { language: env.language, languages: env.languages, timezone: env.timezone },
+      startedAt: new Date(started).toISOString(),
       capturedAt: new Date().toISOString(),
+      timing: { totalMs: Date.now() - started, resultsLoadMs: loaded - submitted },
+      url: page.url(),
+      httpStatus: response?.status(),
+      redirects: response ? response.request().redirectChain().map((r) => r.url()) : [],
+      captcha: page.url().includes("/sorry/"),
+      pageHeight: env.pageHeight,
       bytes: Buffer.byteLength(html),
-      captcha,
-      results,
     };
     fs.writeFileSync(path.join(CAPTURES, `${id}.html`), html);
     fs.writeFileSync(path.join(CAPTURES, `${id}.json`), JSON.stringify(meta, null, 2));
+    // Extract the ads data from the source into SQLite. A failure here must not lose the capture.
+    try { indexCapture(meta, html, `captures/${id}.html`); }
+    catch (e: any) { console.error("[search-automation] ads extraction failed for", id, e?.message || e); }
 
     job.captureId = id;
-    job.resultCount = results.length;
-    job.status = captcha ? "captcha" : "done";
+    job.bytes = meta.bytes;
+    job.status = meta.captcha ? "captcha" : "done";
   } finally {
     await page.close().catch(() => {});
     await ctx?.close().catch(() => {});
@@ -269,28 +304,55 @@ async function work() {
     tmpDir = undefined;
   };
   try {
-    while (jobs.some((j) => j.status === "queued")) {
-      const job = jobs.find((j) => j.status === "queued")!;
+    while (!queuePaused && jobs.some((j) => j.status === "queued")) {
+      // Lowest queue number first: the whole batch runs before any CAPTCHA retry
+      const job = jobs.filter((j) => j.status === "queued").sort((a, b) => a.seq - b.seq)[0];
       job.status = "running";
+      job.error = undefined;
       try {
         // Relaunch when the next job needs a different browser / mode / profile
-        const key = `${job.browser}|${job.mode}|${job.mode === "logged-in" ? job.profile : ""}`;
+        const key = `${job.browser}|${job.mode}|${job.headless ? "headless" : "headed"}|${job.mode === "logged-in" ? job.profile : ""}`;
         if (browser && (browserKey !== key || !browser.connected)) await closeBrowser();
         if (!browser) {
           if (job.mode === "incognito") {
             tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gsa-incognito-"));
-            browser = await launchIncognito(job.browser, tmpDir);
+            browser = await launchIncognito(job.browser, tmpDir, job.headless);
           } else {
             syncProfile(job.browser, job.profile!);
-            browser = await launchLoggedIn(job.browser, job.profile!);
+            browser = await launchLoggedIn(job.browser, job.profile!, job.headless);
           }
           browserKey = key;
         }
         if (job.mode === "logged-in" && profileNote) job.note = profileNote;
         await runJob(browser, job);
+        activePage = undefined;
+        if (job.cancelRequested) job.status = "cancelled"; // cancelled right as it finished
+        job.history.push({ pass: job.pass, status: job.status, captureId: job.captureId });
+        // CAPTCHA: put it back at the end of the queue for the next pass (at most MAX_PASSES tries)
+        const result = job.status as Status; // set inside runJob
+        if (result === "captcha") {
+          if (job.pass < MAX_PASSES) {
+            job.note = `CAPTCHA on pass ${job.pass}. Retrying in pass ${job.pass + 1} after the rest of the batch.`;
+            job.pass++;
+            job.seq = nextSeq++;
+            job.status = "queued";
+          } else {
+            job.note = `CAPTCHA on all ${MAX_PASSES} passes. Stopped trying.`;
+          }
+        } else if (result === "done" && job.pass > 1) {
+          job.note = `Succeeded on pass ${job.pass} (CAPTCHA before).`;
+        }
+        // "New each time": close the browser after every keyword, so the next one starts from a fresh launch
+        if (job.freshBrowser) await closeBrowser();
       } catch (e: any) {
-        job.status = "error";
-        job.error = e?.code === "ECONNREFUSED" ? "Path server on :3000 is not running" : String(e?.message || e);
+        if (job.cancelRequested) {
+          job.status = "cancelled";
+        } else {
+          job.status = "error";
+          job.error = e?.code === "ECONNREFUSED" ? "Path server on :3000 is not running" : String(e?.message || e);
+        }
+        job.history.push({ pass: job.pass, status: job.status });
+        if (job.freshBrowser) await closeBrowser(); // a failed keyword must not leave its browser behind
       }
     }
   } finally {
@@ -496,7 +558,30 @@ const server = http.createServer(async (req, res) => {
       const page = viewSourcePage(meta, html, url.searchParams.get("format") === "1", url.searchParams.get("wrap") !== "0");
       return send(res, 200, page, "text/html; charset=utf-8");
     }
-    if (req.method === "GET" && p === "/api/jobs") return json(res, { working, jobs });
+    if (req.method === "GET" && p === "/api/jobs") return json(res, { working, queuePaused, jobs });
+
+    // Whole queue: pause (the running keyword finishes, the rest wait) / resume
+    const qa = p.match(/^\/api\/queue\/(pause|resume)$/);
+    if (req.method === "POST" && qa) {
+      queuePaused = qa[1] === "pause";
+      if (!queuePaused) work();
+      return json(res, { ok: true, queuePaused });
+    }
+
+    // One keyword: pause / resume / delete (waiting ones) or cancel (the running one)
+    const ja = p.match(/^\/api\/jobs\/(\d+)\/(pause|resume|delete|cancel)$/);
+    if (req.method === "POST" && ja) {
+      const idx = jobs.findIndex((j) => j.id === Number(ja[1]));
+      if (idx < 0) return json(res, { error: "Run not found" }, 404);
+      const job = jobs[idx];
+      const action = ja[2];
+      if (action === "pause" && job.status === "queued") job.status = "paused";
+      else if (action === "resume" && job.status === "paused") { job.status = "queued"; work(); }
+      else if (action === "delete" && job.status !== "running") jobs.splice(idx, 1);
+      else if (action === "cancel" && job.status === "running") { job.cancelRequested = true; await activePage?.close().catch(() => {}); }
+      else return json(res, { error: `Cannot ${action} a ${job.status} run` }, 409);
+      return json(res, { ok: true });
+    }
     if (req.method === "GET" && p === "/api/browsers") {
       return json(res, (Object.keys(BROWSERS) as BrowserKind[]).map((k) => ({
         id: k,
@@ -517,7 +602,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/run") {
       let body = "";
       for await (const chunk of req) body += chunk;
-      const { queries, mode, browser, profile, device } = JSON.parse(body || "{}");
+      const { queries, mode, browser, profile, device, headless, freshBrowser, replaceId } = JSON.parse(body || "{}");
       const dev: Device = device === "mobile" ? "mobile" : "desktop";
       const parsed = parseQueries(String(queries || ""));
       if (!parsed.length) return json(res, { error: "Enter at least one query" }, 400);
@@ -529,17 +614,26 @@ const server = http.createServer(async (req, res) => {
         prof = profiles.find((x) => x.dir === profile) || profiles.find((x) => x.dir === lastUsed) || profiles[0];
       }
       for (const q of parsed)
-        jobs.push({ id: nextJobId++, mode: m, browser: kind, device: dev, profile: prof?.dir, profileName: prof?.name, ...q, status: "queued" });
+        jobs.push({ id: nextJobId++, mode: m, browser: kind, device: dev, headless: headless === true, freshBrowser: freshBrowser !== false, profile: prof?.dir, profileName: prof?.name, ...q, status: "queued", pass: 1, seq: nextSeq++, history: [], replaceId: typeof replaceId === "string" && validId(replaceId) ? replaceId : undefined });
       work();
-      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, profile: prof?.name });
+      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, headless: headless === true, profile: prof?.name });
     }
 
     if (req.method === "POST" && p === "/api/jobs/clear") {
-      for (let i = jobs.length - 1; i >= 0; i--) if (!["queued", "running"].includes(jobs[i].status)) jobs.splice(i, 1);
+      for (let i = jobs.length - 1; i >= 0; i--) if (!["queued", "paused", "running"].includes(jobs[i].status)) jobs.splice(i, 1);
       return json(res, { ok: true });
     }
 
     if (req.method === "GET" && p === "/api/captures") return json(res, listCaptures());
+
+    // Ads data for one capture, plus metrics for every run of the same keyword (from SQLite)
+    const ad = p.match(/^\/api\/captures\/([^/]+)\/ads$/);
+    if (req.method === "GET" && ad) {
+      const report = validId(ad[1]) ? keywordReport(ad[1]) : null;
+      return report ? json(res, report) : json(res, { error: "No ads data for this capture" }, 404);
+    }
+    // Re-extract every capture (after changing the extractor or adding brand aliases)
+    if (req.method === "POST" && p === "/api/reindex") return json(res, syncCaptures(CAPTURES, true));
 
     const m = p.match(/^\/api\/captures\/([^/]+)(\/raw)?$/);
     if (m && validId(m[1])) {
@@ -547,6 +641,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "DELETE") {
         fs.rmSync(path.join(CAPTURES, `${id}.json`), { force: true });
         fs.rmSync(path.join(CAPTURES, `${id}.html`), { force: true });
+        deleteRun(id);
         return json(res, { ok: true });
       }
       if (m[2]) {
@@ -570,6 +665,14 @@ const server = http.createServer(async (req, res) => {
     json(res, { error: String(e?.message || e) }, 500);
   }
 });
+
+// Load any capture that is not yet in SQLite (or was extracted by an older extractor version)
+try {
+  const r = syncCaptures(CAPTURES);
+  if (r.indexed) console.log(`Ads data: extracted ${r.indexed} of ${r.total} captures into ui/data/ads.sqlite`);
+} catch (e: any) {
+  console.error("[search-automation] could not sync captures into SQLite:", e?.message || e);
+}
 
 server.listen(PORT, () => {
   console.log(`Search Automation UI running:`);

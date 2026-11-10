@@ -18,3 +18,6 @@ node_modules/
 
 # OS files
 .DS_Store
+
+# SQLite ads database (rebuilt from captures)
+search-automation/ui/data/

@@ -43,6 +43,9 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
 .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
 .s-queued { color: var(--muted); } .s-running { color: var(--run); } .s-done { color: var(--ok); }
 .s-captcha { color: var(--warn); } .s-error { color: var(--err); }
+.s-paused { color: var(--warn); } .s-cancelled { color: var(--muted); }
+.acts { display: flex; gap: 6px; margin-top: 4px; }
+button.mini { padding: 2px 10px; font-size: 12px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 
 /* Theme toggle (navbar) */

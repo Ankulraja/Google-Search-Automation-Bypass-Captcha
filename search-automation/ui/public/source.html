@@ -9,10 +9,28 @@
 <style>
   main { display: grid; grid-template-columns: 280px 1fr; gap: 16px; height: calc(100vh - 50px); padding: 16px; }
   @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } }
-  #list { overflow: auto; padding: 0; }
+  #list { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+  #lsearch { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  #lsearch input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
+  #lsearch .muted { font-size: 12px; margin-top: 5px; }
+  #caps { flex: 1; overflow: auto; min-height: 0; }
   .cap { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
   .cap:hover { background: var(--code-bg); }
   .cap.sel { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .cap.captcha { background: color-mix(in srgb, var(--warn) 13%, transparent); }
+  .cap.captcha:hover, .cap.captcha.sel { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+  .cap .cpill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 10px; font-weight: 700; letter-spacing: .03em; color: var(--warn); border: 1px solid var(--warn); vertical-align: 1px; }
+  /* CAPTCHA bar with Run again (only on CAPTCHA captures) */
+  #again { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; padding: 10px 16px;
+    background: color-mix(in srgb, var(--warn) 10%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); }
+  #again .atext { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  #again .atext b { font-size: 13px; color: var(--warn); }
+  #again .atext span { font-size: 12px; color: var(--muted); }
+  #again .opts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  #again select { height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; font-size: 12px; }
+  #again .msg { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  #again .msg:empty { display: none; }
+  @media (max-width: 860px) { #again { grid-template-columns: 1fr; } }
   .cap .q { font-weight: 600; }
   .cap .m { font-size: 12px; color: var(--muted); }
   .cap .vs { font-size: 12px; font-weight: 600; text-decoration: none; }
@@ -20,21 +38,39 @@
   #view { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; }
   #head { padding: 12px 16px; border-bottom: 1px solid var(--border); }
   #head h2 { margin: 0 0 4px; font-size: 16px; }
+  #head .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
+  .bb { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid var(--border); color: var(--muted); }
+  .mb { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .mb.logged-in { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .mb.incognito { background: color-mix(in srgb, var(--tag) 20%, transparent); color: var(--tag); }
   #head .m { font-size: 12px; color: var(--muted); word-break: break-all; }
   #toolbar { padding: 8px 16px; border-bottom: 1px solid var(--border); gap: 8px; }
-  #toolbar .sep { width: 1px; height: 22px; background: var(--border); }
-  #find { width: 220px; padding: 6px 8px; }
   #body { flex: 1; overflow: auto; min-height: 300px; background: var(--code-bg); }
-  #code { margin: 0; padding: 8px 0; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .l { display: flex; }
-  .l > i { flex: 0 0 64px; text-align: right; padding-right: 14px; color: var(--ln); font-style: normal; user-select: none; }
-  .l > span { white-space: pre-wrap; word-break: break-all; padding-right: 16px; min-width: 0; }
-  .l.hit { background: color-mix(in srgb, var(--mark) 35%, transparent); }
-  .l.cur { background: var(--mark); }
-  mark { background: var(--mark); color: inherit; border-radius: 2px; }
   .t { color: var(--tag); } .a { color: var(--attr); } .v { color: var(--str); } .c { color: var(--cmt); font-style: italic; }
   iframe { flex: 1; border: 0; width: 100%; background: #fff; }
   #results { padding: 12px 16px; overflow: auto; }
+  /* Ads data */
+  #ads { padding: 14px 16px; display: grid; gap: 12px; background: var(--bg); min-height: 100%; align-content: start; }
+  #ads .kw { font-size: 13px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .tile .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+  .tile .k { font-size: 12px; color: var(--muted); }
+  .tile .s { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  #ads table td, #ads table th { font-size: 13px; padding: 6px 8px; }
+  #ads td.num, #ads th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #ads .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  #ads tr.cur td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .fsec { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .fhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .fhead h3 { margin: 0; font-size: 15px; }
+  .fhead p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .fval { text-align: right; white-space: nowrap; }
+  .fval b { display: block; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .fval span { font-size: 12px; color: var(--muted); }
+  .fbody { padding: 8px 14px 12px; max-height: 420px; overflow: auto; }
+  .pill { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 11px; border: 1px solid var(--border); color: var(--muted); }
+  .pill.im { color: var(--accent); border-color: var(--accent); }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
   /* Parsed page */
   #parsed { padding: 14px 16px; display: grid; gap: 12px; background: var(--bg); min-height: 100%; }
@@ -54,26 +90,6 @@
   .rp { font-size: 13px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chips span { border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; font-size: 13px; }
-  /* DOM tree */
-  .tree-wrap { display: flex; height: 100%; min-height: 0; }
-  .tree-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .tbar { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  .tbar input { width: 320px; padding: 6px 8px; }
-  #tree { flex: 1; overflow: auto; padding: 8px 6px; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .n { white-space: nowrap; }
-  .k { padding-left: 16px; border-left: 1px dotted var(--border); margin-left: 6px; }
-  .tw { display: inline-block; width: 14px; color: var(--muted); cursor: pointer; user-select: none; }
-  .lbl { cursor: pointer; border-radius: 3px; padding: 0 2px; }
-  .lbl:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-  .lbl.sel { background: var(--mark); }
-  .cnt { color: var(--muted); }
-  .txt { white-space: normal; display: inline; color: var(--text); }
-  #det { width: 360px; flex: 0 0 360px; border-left: 1px solid var(--border); overflow: auto; padding: 12px 14px; background: var(--panel); }
-  #det h3 { margin: 0 0 8px; font: 600 14px ui-monospace, Menlo, monospace; color: var(--tag); }
-  .dl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 12px 0 4px; }
-  .path { display: block; word-break: break-all; font-size: 12px; }
-  .tc { font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
-  @media (max-width: 860px) { .tree-wrap { flex-direction: column; } #det { width: auto; flex: none; border-left: 0; border-top: 1px solid var(--border); } }
 </style>
 </head>
 <body>
@@ -87,7 +103,13 @@
   </button>
 </header>
 <main>
-  <aside class="panel" id="list"><div class="empty">Loading…</div></aside>
+  <aside class="panel" id="list">
+    <div id="lsearch">
+      <input id="lq" type="search" placeholder="Search by MCAT id or keyword…" autocomplete="off">
+      <div id="lcount" class="muted"></div>
+    </div>
+    <div id="caps"><div class="empty">Loading…</div></div>
+  </aside>
   <section class="panel" id="view"><div class="empty">Select a capture on the left.</div></section>
 </main>
 <script>
@@ -95,25 +117,62 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(2) + " MB" : (n / 1024).toFixed(1) + " KB";
 
-let captures = [], current = null, raw = "", mode = "parsed", doc = null;
-const opts = { pretty: true, hideScripts: false, find: "" };
-let hits = [], hitIdx = -1;
+let captures = [], current = null, raw = "", mode = "ads", doc = null;
+const adsCache = new Map(); // capture id -> ads report from SQLite
+
+// Every word typed must appear in the MCAT id (tag) or the search keyword
+function matches(c, q) {
+  const hay = `${c.tag || ""} ${c.query}`.toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
 
 async function loadList() {
   captures = await (await fetch("/api/captures")).json();
-  const list = $("#list");
+  adsCache.clear(); // new runs change the keyword totals
+  renderList();
+  const want = new URLSearchParams(location.search).get("id");
+  if (captures.length) select(captures.some((c) => c.id === want) ? want : (current?.id && captures.some((c) => c.id === current.id) ? current.id : captures[0].id));
+}
+
+function renderList() {
+  const list = $("#caps");
+  const q = $("#lq").value.trim();
+  const shown = q ? captures.filter((c) => matches(c, q)) : captures;
+  $("#lcount").textContent = q ? `${shown.length} of ${captures.length} captures` : `${captures.length} captures`;
   if (!captures.length) { list.innerHTML = `<div class="empty">No captures yet.<br><a href="/">Run a query</a> first.</div>`; return; }
-  list.innerHTML = captures.map((c) => `
-    <div class="cap" data-id="${esc(c.id)}">
-      <div class="q">${esc(c.query)}</div>
-      <div class="m">${c.browser === "chrome" ? "Chrome" : "Brave"} · ${c.device === "mobile" ? "Mobile" : "Desktop"} · ${c.mode === "incognito" ? "Incognito" : "Logged-in"}${c.profileName ? " (" + esc(c.profileName) + ")" : ""} · ${c.tag ? esc(c.tag) + " · " : ""}${new Date(c.capturedAt).toLocaleString()} · ${kb(c.bytes)}${c.captcha ? " · CAPTCHA" : ` · ${c.results.length} results`}</div>
+  if (!shown.length) { list.innerHTML = `<div class="empty">No captures match “${esc(q)}”.</div>`; return; }
+  list.innerHTML = shown.map((c) => `
+    <div class="cap${c.captcha ? " captcha" : ""}" data-id="${esc(c.id)}">
+      <div class="q">${esc(c.query)}${c.captcha ? `<span class="cpill">CAPTCHA</span>` : ""}</div>
+      <div class="m">${c.browser === "chrome" ? "Chrome" : "Brave"} · ${c.device === "mobile" ? "Mobile" : "Desktop"} · ${c.headless ? "Headless · " : ""}${c.mode === "incognito" ? "Incognito" : "Logged-in"}${c.profileName ? " (" + esc(c.profileName) + ")" : ""} · ${c.tag ? esc(c.tag) + " · " : ""}${new Date(c.capturedAt).toLocaleString()} · ${kb(c.bytes)}${c.captcha ? " · CAPTCHA" : ""}</div>
       <a class="vs" href="/view-page/${encodeURIComponent(c.id)}" target="_blank">View page ↗</a> · <a class="vs" href="/view-source/${encodeURIComponent(c.id)}" target="_blank">View source ↗</a>
     </div>`).join("");
   list.querySelectorAll("a.vs").forEach((a) => (a.onclick = (e) => e.stopPropagation()));
   list.querySelectorAll(".cap").forEach((el) => (el.onclick = () => select(el.dataset.id)));
-  const want = new URLSearchParams(location.search).get("id");
-  select(captures.some((c) => c.id === want) ? want : (current?.id && captures.some((c) => c.id === current.id) ? current.id : captures[0].id));
+  if (current) list.querySelector(`.cap[data-id="${CSS.escape(current.id)}"]`)?.classList.add("sel");
 }
+
+$("#lq").oninput = renderList;
+
+// New captures (e.g. from Run again) show up in the list without a page refresh
+const sig = (list) => list.map((c) => c.id + "@" + c.capturedAt).join("|");
+setInterval(async () => {
+  try {
+    const fresh = await (await fetch("/api/captures")).json();
+    if (sig(fresh) === sig(captures)) return;
+    const before = current && captures.find((c) => c.id === current.id);
+    captures = fresh;
+    adsCache.clear(); // keyword totals changed
+    renderList();
+    // The open entry was overwritten (Run again / retry): reload it in place
+    const after = current && captures.find((c) => c.id === current.id);
+    if (after && before && after.capturedAt !== before.capturedAt) select(after.id);
+  } catch {}
+}, 5000);
+$("#lq").onkeydown = (e) => {
+  if (e.key === "Escape") { e.target.value = ""; renderList(); }
+  if (e.key === "Enter") { const first = $("#caps .cap"); if (first) select(first.dataset.id); }
+};
 
 async function select(id) {
   current = captures.find((c) => c.id === id);
@@ -130,23 +189,31 @@ function renderView() {
   $("#view").innerHTML = `
     <div id="head">
       <h2>${esc(c.query)} ${c.tag ? `<span class="muted" style="font-weight:400">· ${esc(c.tag)}</span>` : ""}</h2>
-      <div class="m" title="${esc(c.url)}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.url)}</div>
-      <div class="m">Captured ${new Date(c.capturedAt).toLocaleString()} · ${kb(c.bytes)} · saved as <code>ui/captures/${esc(c.id)}.html</code></div>
+      <div class="tags">
+        <span class="bb">${c.browser === "brave" ? "Brave" : "Chrome"}</span>
+        <span class="bb">${c.device === "mobile" ? "Mobile" : "Desktop"}</span>
+        <span class="bb">${c.headless ? "Headless" : "Headed"}</span>
+        <span class="mb ${c.mode === "incognito" ? "incognito" : "logged-in"}">${c.mode === "incognito" ? "Incognito" : "Logged-in"}${c.profileName ? " · " + esc(c.profileName) : ""}</span>
+      </div>
+      <div class="m">${new Date(c.capturedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} · ${new Date(c.capturedAt).toLocaleTimeString()} · ${kb(c.bytes)}</div>
     </div>
+    ${c.captcha ? `
+    <div id="again">
+      <div class="atext"><b>Stuck on a CAPTCHA</b><span>Google blocked this search. Try it again, optionally with other settings.</span></div>
+      <div class="opts">
+        <select id="agBrowser" aria-label="Browser"><option value="chrome">Chrome</option><option value="brave">Brave</option></select>
+        <select id="agDevice" aria-label="Device"><option value="mobile">Mobile</option><option value="desktop">Desktop</option></select>
+        <select id="agWindow" aria-label="Window"><option value="headless">Headless</option><option value="headed">Headed</option></select>
+        <select id="agMode" aria-label="Mode"><option value="incognito">Incognito</option><option value="logged-in">Logged-in</option></select>
+        <button id="agRun" class="primary">Run again</button>
+      </div>
+      <div class="msg" id="agMsg"></div>
+    </div>` : ""}
     <div id="toolbar" class="row">
+      <button data-mode="ads">Ads data</button>
       <button data-mode="parsed">Parsed page</button>
-      <button data-mode="tree">DOM tree</button>
-      <button data-mode="source">Source</button>
       <button data-mode="preview">Preview</button>
-      <button data-mode="results">Results (${c.results.length})</button>
-      <span class="sep"></span>
-      <span id="srcTools" class="row">
-        <button id="pretty">Format</button>
-        <button id="hide">Hide &lt;script&gt;/&lt;style&gt;</button>
-        <input id="find" type="text" placeholder="Find in source…" value="${esc(opts.find)}">
-        <button id="prev">↑</button><button id="next">↓</button>
-        <span id="count" class="muted" style="font-size:12px"></span>
-      </span>
+      <button data-mode="results">Results</button>
       <span style="flex:1"></span>
       <a href="/view-page/${encodeURIComponent(c.id)}" target="_blank" style="font-weight:600">View page ↗</a>
       <a href="/view-source/${encodeURIComponent(c.id)}" target="_blank" style="font-weight:600">View source ↗</a>
@@ -156,13 +223,27 @@ function renderView() {
     </div>
     <div id="body"></div>`;
   $("#toolbar").querySelectorAll("[data-mode]").forEach((b) => (b.onclick = () => { mode = b.dataset.mode; renderBody(); }));
-  $("#pretty").onclick = () => { opts.pretty = !opts.pretty; renderBody(); };
-  $("#hide").onclick = () => { opts.hideScripts = !opts.hideScripts; renderBody(); };
-  let t; $("#find").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { opts.find = e.target.value; renderBody(); }, 250); };
-  $("#find").onkeydown = (e) => { if (e.key === "Enter") jump(e.shiftKey ? -1 : 1); };
-  $("#prev").onclick = () => jump(-1);
-  $("#next").onclick = () => jump(1);
-  $("#copy").onclick = async () => { await navigator.clipboard.writeText(sourceText()); flash($("#copy"), "Copied"); };
+  if (c.captcha) {
+  $("#agBrowser").value = c.browser === "brave" ? "brave" : "chrome";
+  $("#agDevice").value = c.device === "desktop" ? "desktop" : "mobile";
+  $("#agWindow").value = c.headless ? "headless" : "headed";
+  $("#agMode").value = c.mode === "logged-in" ? "logged-in" : "incognito";
+  $("#agRun").onclick = async () => {
+    $("#agRun").disabled = true;
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        queries: (c.tag ? c.tag + "  " : "") + c.query,
+        browser: $("#agBrowser").value, device: $("#agDevice").value,
+        headless: $("#agWindow").value === "headless", mode: $("#agMode").value, freshBrowser: true,
+        replaceId: c.id, // update this entry instead of adding a new one
+      }) });
+      const d = await r.json();
+      $("#agMsg").innerHTML = d.error ? esc(d.error) : `Queued. Follow it on <a href="/">Run queries</a>. This entry updates by itself when the run finishes.`;
+    } catch { $("#agMsg").textContent = "Could not reach the server."; }
+    $("#agRun").disabled = false;
+  };
+  }
+  $("#copy").onclick = async () => { await navigator.clipboard.writeText(raw); flash($("#copy"), "Copied"); };
   $("#dl").onclick = () => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([raw], { type: "text/html" }));
@@ -178,39 +259,8 @@ function renderView() {
 
 function flash(btn, text) { const o = btn.textContent; btn.textContent = text; setTimeout(() => (btn.textContent = o), 1200); }
 
-const VOID = /^<(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr|!doctype)\b/i;
-function sourceText() {
-  let s = raw;
-  if (opts.hideScripts) {
-    s = s.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (m, a, body, b) => body.trim() ? `${a}/* ${body.length.toLocaleString()} chars hidden */${b}` : m)
-         .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, body, b) => body.trim() ? `${a}/* ${body.length.toLocaleString()} chars hidden */${b}` : m);
-  }
-  if (opts.pretty) {
-    const parts = s.replace(/>\s*</g, ">\n<").split("\n");
-    let depth = 0;
-    s = parts.map((line) => {
-      const l = line.trim();
-      if (/^<\//.test(l)) depth = Math.max(0, depth - 1);
-      const out = "  ".repeat(Math.min(depth, 40)) + l;
-      const opens = /^<[a-z]/i.test(l) && !VOID.test(l) && !/\/>$/.test(l) && !/^<([a-z0-9-]+)\b[\s\S]*<\/\1>$/i.test(l);
-      if (opens) depth++;
-      return out;
-    }).join("\n");
-  }
-  return s;
-}
-
-function highlight(line) {
-  // Light HTML colouring on an escaped line
-  return esc(line)
-    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="c">$1</span>')
-    .replace(/(&lt;\/?)([a-zA-Z][\w:-]*)/g, '$1<span class="t">$2</span>')
-    .replace(/(\s)([\w:@-]+)(=)(&quot;[^]*?&quot;)/g, '$1<span class="a">$2</span>$3<span class="v">$4</span>');
-}
-
 function renderBody() {
   document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
-  $("#srcTools").style.display = mode === "source" ? "" : "none";
   const body = $("#body");
   if (mode === "preview") {
     body.innerHTML = current.device === "mobile"
@@ -219,39 +269,95 @@ function renderBody() {
     body.style.display = "flex"; return;
   }
   body.style.display = "";
+  if (mode === "ads") return renderAds(body);
   if (mode === "parsed") return renderParsed(body);
-  if (mode === "tree") return renderTree(body);
   if (mode === "results") {
-    const r = current.results;
+    // Parsed from the saved source (captures no longer store results)
+    const r = parsePage(doc).organic.map((x) => ({ title: x.title, url: x.href, site: x.site }));
     body.innerHTML = `<div id="results">${current.captcha ? `<p style="color:var(--warn)">Google showed a CAPTCHA for this query.</p>` : ""}
       <table><thead><tr><th>#</th><th>Title</th><th>Site</th></tr></thead><tbody>
       ${r.map((x, i) => `<tr><td class="muted">${i + 1}</td><td><a href="${esc(x.url)}" target="_blank" rel="noreferrer">${esc(x.title)}</a></td><td class="muted">${esc(x.site || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="muted">No results.</td></tr>`}
       </tbody></table></div>`;
     return;
   }
+  mode = "ads"; // unknown tab: show Ads data
+  return renderBody();
+}
 
-  $("#pretty").classList.toggle("on", opts.pretty);
-  $("#hide").classList.toggle("on", opts.hideScripts);
-  const lines = sourceText().split("\n");
-  const q = opts.find.toLowerCase();
-  hits = []; hitIdx = -1;
-  const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi") : null;
-  const html = lines.map((line, i) => {
-    let content;
-    if (re && line.toLowerCase().includes(q)) {
-      hits.push(i);
-      // escape around the matches so <mark> survives
-      let out = "", last = 0;
-      line.replace(re, (m, off) => { out += esc(line.slice(last, off)) + "<mark>" + esc(m) + "</mark>"; last = off + m.length; return m; });
-      content = out + esc(line.slice(last));
-      return `<div class="l hit" id="L${i}"><i>${i + 1}</i><span>${content}</span></div>`;
-    }
-    content = line.length > 20000 ? esc(line) : highlight(line);
-    return `<div class="l" id="L${i}"><i>${i + 1}</i><span>${content || " "}</span></div>`;
-  }).join("");
-  body.innerHTML = `<pre id="code">${html}</pre>`;
-  $("#count").textContent = q ? `${hits.length} line${hits.length === 1 ? "" : "s"}` : `${lines.length.toLocaleString()} lines`;
-  if (hits.length) jump(1);
+// ================= Ads data (from SQLite, extracted from the saved source) =================
+async function renderAds(body) {
+  const id = current.id;
+  if (!adsCache.has(id)) {
+    body.innerHTML = `<div class="empty">Loading ads data…</div>`;
+    const r = await fetch(`/api/captures/${encodeURIComponent(id)}/ads`);
+    adsCache.set(id, r.ok ? await r.json() : { error: (await r.json().catch(() => ({}))).error || "No ads data. If the code was just updated, restart the web server." });
+    if (current?.id !== id || mode !== "ads") return; // user moved on while loading
+  }
+  const d = adsCache.get(id);
+  if (d.error) { body.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+  const m = d.metrics, n = (v) => Number(v || 0), total = n(m.total_runs);
+  const pct = (a, b) => (b ? Math.round((100 * a) / b) + "%" : "—");
+  const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+  const kw = d.run.mcat_id ? `MCAT ${esc(d.run.mcat_id)} · ${esc(d.run.mcat_name)}` : esc(d.run.mcat_name);
+  const none = (t) => `<p class="muted" style="margin:0">${t}</p>`;
+  const nameCell = (name, domain, im) => `${esc(name)}${name !== domain ? ` <span class="muted">· ${esc(domain)}</span>` : ""}${im ? ` <span class="pill im">IndiaMART</span>` : ""}`;
+  const when = (r) => `${esc(r.run_date)} ${esc(r.run_time)} · ${esc(r.city || "—")} · ${esc(r.device)}`;
+  const okRuns = d.runs.filter((r) => r.status === "ok");
+
+  // One dedicated section per requirement field, named exactly as in the requirement
+  const section = (name, definition, value, sub, inner) => `
+    <section class="fsec">
+      <div class="fhead"><div><h3>${name}</h3><p>${definition}</p></div><div class="fval"><b>${value}</b>${sub ? `<span>${sub}</span>` : ""}</div></div>
+      <div class="fbody">${inner}</div>
+    </section>`;
+
+  const adsTable = (list, withPrice) => list.length ? `
+    <table><thead><tr><th>Run</th><th class="num">#</th><th>Advertiser</th><th>Title</th>${withPrice ? `<th class="num">Price</th>` : ""}<th>Brand</th></tr></thead><tbody>
+    ${list.map((a) => `<tr class="${a.run_id === id ? "cur" : ""}"><td class="muted" style="white-space:nowrap">${when(a)}</td><td class="num">${a.position}</td>
+      <td>${nameCell(a.advertiser_name, a.advertiser_domain, a.is_indiamart)}</td>
+      <td>${a.landing_url ? `<a href="${esc(a.landing_url)}" target="_blank" rel="noreferrer">${esc(a.title)}</a>` : esc(a.title)}</td>
+      ${withPrice ? `<td class="num">${a.price != null ? "₹" + Number(a.price).toLocaleString("en-IN") : ""}</td>` : ""}
+      <td>${a.brand ? esc(a.brand) : `<span class="pill">${esc(a.brand_status.replace(/_/g, " "))}</span>`}</td></tr>`).join("")}
+    </tbody></table>` : "";
+
+  const shoppingAds = d.keywordAds.filter((a) => a.ad_type === "shopping");
+  const searchAds = d.keywordAds.filter((a) => a.ad_type === "search");
+  const bothRuns = okRuns.filter((r) => r.shopping_ads_seen > 0 && r.search_ads_seen > 0);
+
+  const cov = Object.fromEntries(d.brandCoverage.map((c) => [c.status, c.ads]));
+  const totalAds = d.brandCoverage.reduce((a, c) => a + c.ads, 0);
+  const covLine = totalAds
+    ? `Brand identified in ${pct(n(cov.found), totalAds)} of ${plural(totalAds, "ad")} (not in ad ${pct(n(cov.not_in_ad), totalAds)}, unbranded ${pct(n(cov.unbranded), totalAds)}, unresolved ${pct(n(cov.unresolved), totalAds)}).`
+    : "No ads seen for this keyword yet.";
+
+  body.innerHTML = `<div id="ads">
+    <div class="kw">Keyword: <b>${kw}</b> · Total Runs: <b>${total}</b> · City Count: <b>${n(m.city_count)}</b>${d.cities.length ? ` (${d.cities.map((c) => esc(c.city)).join(", ")})` : ""}${d.skippedRuns ? ` · ${plural(d.skippedRuns, "CAPTCHA/error run")} not counted` : ""}</div>
+
+    ${section("Shopping Ads Count", "Frequency of Google Shopping ads appearing.", n(m.shopping_runs), `of ${plural(total, "run")} · ${pct(n(m.shopping_runs), total)} · ${plural(shoppingAds.length, "ad")} seen`,
+      shoppingAds.length ? adsTable(shoppingAds, true) : none("No Shopping ads appeared in any run."))}
+
+    ${section("Search Ads Count", "Frequency of Google Search ads appearing.", n(m.search_runs), `of ${plural(total, "run")} · ${pct(n(m.search_runs), total)} · ${plural(searchAds.length, "ad")} seen`,
+      searchAds.length ? adsTable(searchAds, false) : none("No Search ads appeared in any run."))}
+
+    ${section("Search + Shopping Count", "Frequency of both Shopping and Search ads appearing together.", n(m.both_runs), `of ${plural(total, "run")} · ${pct(n(m.both_runs), total)}`,
+      bothRuns.length ? `<table><thead><tr><th>Run</th><th class="num">Shopping ads</th><th class="num">Search ads</th></tr></thead><tbody>
+        ${bothRuns.map((r) => `<tr class="${r.run_id === id ? "cur" : ""}"><td>${when(r)}</td><td class="num">${r.shopping_ads_seen}</td><td class="num">${r.search_ads_seen}</td></tr>`).join("")}</tbody></table>`
+        : none("No run had both Shopping and Search ads on the same page."))}
+
+    ${section("Top 5 Brands", "The top 5 brands that appeared, along with their frequencies.", d.topBrands.length, d.topBrands.length && d.topBrands.length < 5 ? `Only ${plural(d.topBrands.length, "brand")} found` : "brands",
+      `<p class="note">${covLine}</p>${d.topBrands.length ? `<table><thead><tr><th>#</th><th>Brand</th><th class="num">Frequency (ads)</th><th class="num">Runs seen</th></tr></thead><tbody>
+        ${d.topBrands.map((b, i) => `<tr><td class="muted">${i + 1}</td><td>${esc(b.brand)}</td><td class="num">${b.ads}</td><td class="num">${b.runs}</td></tr>`).join("")}</tbody></table>` : none("No brand identified yet.")}`)}
+
+    ${section("Top 5 Advertisers", "The top 5 advertisers that appeared, along with their frequencies.", d.topAdvertisers.length, "advertisers",
+      d.topAdvertisers.length ? `<table><thead><tr><th>#</th><th>Advertiser</th><th class="num">Frequency (runs)</th><th class="num">Ad slots</th><th class="num">Shopping</th><th class="num">Search</th></tr></thead><tbody>
+        ${d.topAdvertisers.map((r, i) => `<tr><td class="muted">${i + 1}</td><td>${nameCell(r.name, r.domain, r.is_indiamart)}</td><td class="num">${r.runs} <span class="muted">(${pct(r.runs, total)})</span></td><td class="num">${r.ads}</td><td class="num">${r.shopping_ads}</td><td class="num">${r.search_ads}</td></tr>`).join("")}
+        </tbody></table>` : none("No advertisers seen."))}
+
+    ${card("All runs of this keyword", d.runs.length, `
+      <table><thead><tr><th>Date</th><th>Time</th><th>City</th><th>Device</th><th>Status</th><th class="num">Shopping ads</th><th class="num">Search ads</th></tr></thead><tbody>
+      ${d.runs.map((r) => `<tr class="${r.run_id === id ? "cur" : ""}"><td>${esc(r.run_date)}</td><td>${esc(r.run_time)}</td><td>${esc(r.city || "—")}</td><td>${esc(r.device)}</td><td>${esc(r.status)}</td><td class="num">${r.shopping_ads_seen}</td><td class="num">${r.search_ads_seen}</td></tr>`).join("")}
+      </tbody></table>`, false)}
+  </div>`;
 }
 
 // ================= Parsed page =================
@@ -343,143 +449,6 @@ function renderParsed(body) {
     ${card("Headings", p.headings.length, p.headings.length ? `<ul>${p.headings.map((h) => `<li><code class="muted">${h.tag}</code> ${esc(h.text)}</li>`).join("")}</ul>` : none, false)}
     ${card("All links", p.links.length, `<table class="kv">${p.links.map((l) => `<tr><td>${esc(l.text || "—")}</td><td class="u">${link(l.href)}</td></tr>`).join("")}</table>`, false)}
   </div>`;
-}
-
-// ================= DOM tree =================
-let rowOf = new WeakMap(), selRow = null, selMatches = [], selIdx = -1;
-
-function attrsHtml(el) {
-  return [...el.attributes].map((a) => {
-    const v = a.value.length > 80 ? a.value.slice(0, 80) + "…" : a.value;
-    return ` <span class="a">${esc(a.name)}</span>${a.value !== "" ? `=<span class="v">"${esc(v)}"</span>` : ""}`;
-  }).join("");
-}
-const kids = (n) => [...n.childNodes].filter((c) => c.nodeType === 1 || c.nodeType === 8 || (c.nodeType === 3 && c.textContent.trim()));
-
-function makeRow(node) {
-  const row = document.createElement("div");
-  row.className = "n";
-  rowOf.set(node, row);
-  if (node.nodeType === 3) {
-    const t = node.textContent.trim().replace(/\s+/g, " ");
-    const isCode = /^(script|style)$/i.test(node.parentNode?.nodeName || "");
-    row.innerHTML = `<span class="tw"></span><span class="txt">${isCode ? `<span class="muted">… ${t.length.toLocaleString()} chars of ${node.parentNode.nodeName.toLowerCase()}</span>` : `"${esc(t.length > 240 ? t.slice(0, 240) + "…" : t)}"`}</span>`;
-    return row;
-  }
-  if (node.nodeType === 8) { row.innerHTML = `<span class="tw"></span><span class="c">&lt;!-- ${esc(node.textContent.trim().slice(0, 120))} --&gt;</span>`; return row; }
-  const tag = node.tagName.toLowerCase();
-  const ch = kids(node);
-  row.innerHTML = `<span class="tw">${ch.length ? "▸" : ""}</span><span class="lbl">&lt;<span class="t">${tag}</span>${attrsHtml(node)}&gt;<span class="cnt">${ch.length ? `…${ch.length}…&lt;/${tag}&gt;` : `&lt;/${tag}&gt;`}</span></span><div class="k" hidden></div>`;
-  row.querySelector(".tw").onclick = (e) => { e.stopPropagation(); toggle(node); };
-  row.querySelector(".lbl").onclick = (e) => { e.stopPropagation(); selectNode(node); };
-  row.querySelector(".lbl").ondblclick = (e) => { e.stopPropagation(); toggle(node); };
-  return row;
-}
-
-function expand(node, open = true) {
-  const row = rowOf.get(node);
-  if (!row || node.nodeType !== 1) return;
-  const box = row.querySelector(":scope > .k");
-  const ch = kids(node);
-  if (!ch.length) return;
-  if (open && !box.childElementCount) ch.forEach((c) => box.appendChild(makeRow(c)));
-  box.hidden = !open;
-  row.querySelector(":scope > .tw").textContent = open ? "▾" : "▸";
-  row.querySelector(":scope > .lbl > .cnt").style.display = open ? "none" : "";
-}
-const toggle = (node) => expand(node, rowOf.get(node).querySelector(":scope > .k").hidden);
-
-function cssPath(el) {
-  const parts = [];
-  for (let e = el; e && e.nodeType === 1 && e !== doc.documentElement; e = e.parentElement) {
-    if (e.id) { parts.unshift("#" + e.id); break; }
-    let s = e.tagName.toLowerCase();
-    const sib = e.parentElement ? [...e.parentElement.children].filter((x) => x.tagName === e.tagName) : [];
-    if (sib.length > 1) s += `:nth-of-type(${sib.indexOf(e) + 1})`;
-    parts.unshift(s);
-  }
-  return parts.join(" > ");
-}
-
-function reveal(node) {
-  const chain = [];
-  for (let e = node.parentElement; e; e = e.parentElement) chain.unshift(e);
-  chain.forEach((e) => expand(e, true));
-}
-
-function selectNode(node, scroll) {
-  selRow?.querySelector(":scope > .lbl")?.classList.remove("sel");
-  reveal(node);
-  selRow = rowOf.get(node);
-  const lbl = selRow.querySelector(":scope > .lbl");
-  lbl.classList.add("sel");
-  if (scroll) {
-    const tree = $("#tree");
-    lbl.scrollIntoView({ block: "center", inline: "nearest" });
-    // keep the start of the row (indent + tag) visible instead of scrolling sideways
-    tree.scrollLeft = Math.max(0, lbl.getBoundingClientRect().left - tree.getBoundingClientRect().left + tree.scrollLeft - 80);
-  }
-  const text = txt(node);
-  $("#det").innerHTML = `
-    <h3>&lt;${node.tagName.toLowerCase()}&gt;</h3>
-    <div class="dl">CSS path</div><code class="path">${esc(cssPath(node))}</code>
-    <div class="dl">Attributes (${node.attributes.length})</div>
-    ${node.attributes.length ? `<table class="kv">${[...node.attributes].map((a) => `<tr><th>${esc(a.name)}</th><td>${esc(a.value)}</td></tr>`).join("")}</table>` : `<p class="muted">None</p>`}
-    <div class="dl">Stats</div>
-    <table class="kv"><tr><th>Children</th><td>${node.children.length}</td></tr><tr><th>Descendants</th><td>${node.getElementsByTagName("*").length.toLocaleString()}</td></tr><tr><th>Links inside</th><td>${node.querySelectorAll("a[href]").length}</td></tr><tr><th>HTML size</th><td>${kb(node.outerHTML.length)}</td></tr></table>
-    <div class="dl">Text content (${text.length.toLocaleString()} chars)</div>
-    <div class="tc">${esc(text.slice(0, 3000))}${text.length > 3000 ? "…" : ""}</div>
-    <div class="row" style="margin-top:10px"><button id="cpHtml">Copy outer HTML</button><button id="cpPath">Copy CSS path</button></div>`;
-  $("#cpHtml").onclick = async () => { await navigator.clipboard.writeText(node.outerHTML); flash($("#cpHtml"), "Copied"); };
-  $("#cpPath").onclick = async () => { await navigator.clipboard.writeText(cssPath(node)); flash($("#cpPath"), "Copied"); };
-}
-
-function renderTree(body) {
-  rowOf = new WeakMap(); selRow = null; selMatches = []; selIdx = -1;
-  body.innerHTML = `<div class="tree-wrap">
-    <div class="tree-main">
-      <div class="row tbar"><input id="sel" type="text" placeholder="CSS selector, e.g.  #rso h3   [data-q]   #tads a"><button id="selGo">Find</button><button id="selPrev">↑</button><button id="selNext">↓</button><span id="selCount" class="muted" style="font-size:12px"></span></div>
-      <div id="tree"><div class="n muted">&lt;!DOCTYPE ${esc(doc.doctype?.name || "html")}&gt;</div></div>
-    </div>
-    <aside id="det"><p class="muted">Click an element to see its attributes, CSS path and text.</p></aside>
-  </div>`;
-  const root = doc.documentElement;
-  $("#tree").appendChild(makeRow(root));
-  expand(root);
-  if (doc.body) expand(doc.body);
-  const step = (dir) => {
-    if (!selMatches.length) return;
-    selIdx = (selIdx + dir + selMatches.length) % selMatches.length;
-    selectNode(selMatches[selIdx], true);
-    $("#selCount").textContent = `${selIdx + 1} / ${selMatches.length}`;
-  };
-  const go = () => {
-    const q = $("#sel").value.trim();
-    if (!q) return;
-    try { selMatches = [...doc.querySelectorAll(q)]; } catch { $("#selCount").textContent = "Invalid selector"; return; }
-    selIdx = -1;
-    $("#selCount").textContent = selMatches.length ? "" : "No matches";
-    step(1);
-  };
-  $("#selGo").onclick = go;
-  let lastQ = "";
-  $("#sel").onkeydown = (e) => {
-    if (e.key !== "Enter") return;
-    const q = $("#sel").value.trim();
-    if (q !== lastQ) { lastQ = q; go(); } else step(e.shiftKey ? -1 : 1);
-  };
-  $("#selPrev").onclick = () => step(-1);
-  $("#selNext").onclick = () => step(1);
-}
-
-function jump(dir) {
-  if (!hits.length) return;
-  document.querySelector(".l.cur")?.classList.remove("cur");
-  hitIdx = (hitIdx + dir + hits.length) % hits.length;
-  const el = document.getElementById("L" + hits[hitIdx]);
-  el.classList.add("cur");
-  el.scrollIntoView({ block: "center" });
-  $("#count").textContent = `${hitIdx + 1} / ${hits.length} lines`;
 }
 
 loadList();
