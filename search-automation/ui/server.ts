@@ -527,7 +527,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/style.css")
       return send(res, 200, fs.readFileSync(path.join(PUBLIC, "style.css")), "text/css; charset=utf-8");
 
-    if (p === "/favicon.ico") { res.writeHead(204); return res.end(); }
+    if (req.method === "GET" && (p === "/favicon.svg" || p === "/favicon.ico"))
+      return send(res, 200, fs.readFileSync(path.join(PUBLIC, "favicon.svg")), "image/svg+xml");
 
     const vp = p.match(/^\/view-page\/([^/]+)$/);
     if (req.method === "GET" && vp) {
