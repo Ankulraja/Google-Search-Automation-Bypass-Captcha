@@ -97,6 +97,8 @@ flowchart TD
 .
 ├── search-automation/          # Main automation project
 │   ├── index.ts               # Humanizer library: human-like click(), type(), moveMouse()
+│   ├── browsers.ts            # Finds Chrome/Brave + profiles on macOS/Windows/Linux
+│   ├── scripts/               # path-server launcher, setup check (npm run doctor)
 │   ├── server/server.py       # Path server: serves the trained model on :3000
 │   ├── model/                 # Trained model file(s) (*.pt), newest is used
 │   ├── ui/
@@ -113,39 +115,56 @@ flowchart TD
 
 ## Setup
 
-**Requirements:** Node.js 18+, Python 3.10+, and Google Chrome and/or Brave installed (macOS paths by default).
+Works on **macOS, Windows and Linux**.
+
+**Requirements:** Node.js 22.13+, Python 3.10+, and Google Chrome and/or Brave. The browsers are found automatically. A browser that isn't installed is disabled in the UI.
+
+> Using Claude Code? Just ask it to "do a full setup". [`CLAUDE.md`](CLAUDE.md) has step-by-step instructions it follows on any OS.
 
 ```bash
 git clone https://github.com/Ankulraja/Google-Search-Automation-Bypass-Captcha.git
 cd Google-Search-Automation-Bypass-Captcha
-
-# Python env for the path server
-python3 -m venv .venv
-.venv/bin/pip install -r search-automation/server/requirements.txt
-
-# Node dependencies
-cd search-automation
-npm install
 ```
 
-Make sure there is a trained model (`*.pt`) in `search-automation/model/`. See [Training your own model](#training-your-own-model) to create one.
+Python env for the path server:
+
+```bash
+# macOS / Linux
+python3 -m venv .venv
+.venv/bin/pip install -r search-automation/server/requirements.txt
+```
+```powershell
+# Windows
+py -3 -m venv .venv
+.venv\Scripts\pip install -r search-automation\server\requirements.txt
+```
+
+Node dependencies and a setup check:
+
+```bash
+cd search-automation
+npm install
+npm run doctor        # prints OK / FAIL for Node, Python, model, browsers
+```
+
+The trained model is included in `search-automation/model/`, so no training is needed. See [Training your own model](#training-your-own-model) to make a new one.
 
 ---
 
 ## Usage
 
+Run both from `search-automation/`. They're two separate servers, so use two terminals.
+
 ### 1. Start the path server (terminal 1)
 
 ```bash
-cd search-automation
-../.venv/bin/python server/server.py      # runs on http://localhost:3000
+npm run path-server      # http://localhost:3000, uses ../.venv on any OS
 ```
 
 ### 2. Start the capture UI (terminal 2)
 
 ```bash
-cd search-automation
-npx ts-node ui/server.ts                  # runs on http://localhost:4000
+npm run ui               # http://localhost:4000, prints which browsers were found
 ```
 
 Open **http://localhost:4000** and:
@@ -178,7 +197,8 @@ Useful environment variables:
 | `PROFILE` | brave-logged-in | `Default` |
 | `HOLD_MS` | brave-logged-in | `120000` (how long the window stays open) |
 | `UI_PORT` | capture UI | `4000` |
-| `CHROME_PATH` / `BRAVE_PATH` | capture UI | standard macOS app paths |
+| `CHROME_PATH` / `BRAVE_PATH` | capture UI, examples | auto-detected per OS |
+| `CHROME_PROFILE_DIR` / `BRAVE_PROFILE_DIR` | capture UI, examples | auto-detected per OS (the browser's "User Data" folder) |
 
 ### Use the library in your own script
 

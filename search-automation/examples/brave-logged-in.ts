@@ -1,30 +1,24 @@
 import puppeteer from "puppeteer";
-import { execSync } from "child_process";
-import os from "os";
-import path from "path";
 import Humanizer from "../index";
+import { BROWSERS, copyProfile, notFoundHint } from "../browsers";
 
 // Runs the automation in a COPY of your real Brave profile (logins, cookies, extensions).
 // Chromium 136+ refuses remote debugging on the default profile dir, so we clone it.
-const BRAVE = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser";
-const SRC = path.join(os.homedir(), "Library/Application Support/BraveSoftware/Brave-Browser");
-const DEST = process.env.PROFILE_COPY || path.join(os.tmpdir(), "gsa-brave-profile");
+// Paths are auto-detected on macOS / Windows / Linux (override with BRAVE_PATH, BRAVE_PROFILE_DIR, PROFILE_COPY).
+const BRAVE = BROWSERS.brave.exe;
+const DEST = BROWSERS.brave.copy;
 const PROFILE = process.env.PROFILE || "Default";
 const QUERY = process.env.QUERY || "mobile phone";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function syncProfile() {
   console.log(`Copying Brave profile "${PROFILE}" -> ${DEST} ...`);
-  const ex = ["Cache", "Code Cache", "GPUCache", "Service Worker/CacheStorage", "DawnCache", "GrShaderCache"]
-    .map((e) => `--exclude='${e}'`)
-    .join(" ");
-  execSync(`mkdir -p "${DEST}"`);
-  execSync(`cp "${SRC}/Local State" "${DEST}/Local State"`);
-  execSync(`rsync -a --delete ${ex} "${SRC}/${PROFILE}/" "${DEST}/${PROFILE}/"`);
-  execSync(`rm -f "${DEST}"/Singleton*`);
+  const { skipped } = copyProfile("brave", PROFILE);
+  if (skipped.length) console.log(`Skipped ${skipped.length} locked file(s). If logins are missing, close Brave and run again.`);
 }
 
 (async () => {
+  if (!BRAVE) throw new Error(notFoundHint("brave"));
   syncProfile();
 
   const browser = await puppeteer.launch({

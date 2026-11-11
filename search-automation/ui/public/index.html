@@ -227,10 +227,15 @@ fetch("/api/browsers").then((r) => r.json()).then((list) => {
     const radio = $("#br-" + b.id);
     if (!radio) continue;
     radio.disabled = !b.installed;
-    radio.nextElementSibling.title = b.installed ? "" : b.label + " is not installed";
+    radio.nextElementSibling.title = b.installed ? b.label : (b.hint || b.label + " is not installed on this computer");
   }
   const sel = document.querySelector('input[name="browser"]:checked');
   if (sel.disabled) { const ok = document.querySelector('input[name="browser"]:not(:disabled)'); if (ok) ok.checked = true; }
+  // No supported browser at all: nothing can run
+  if (!list.some((b) => b.installed)) {
+    $("#run").disabled = true;
+    $("#run").title = "Install Google Chrome or Brave (or set CHROME_PATH / BRAVE_PATH), then restart the server";
+  }
   updateProfiles();
 }).catch(() => {});
 showMode();

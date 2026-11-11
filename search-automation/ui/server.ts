@@ -2,29 +2,15 @@ import http from "http";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execSync } from "child_process";
 import puppeteer, { Browser, Page } from "puppeteer";
 import Humanizer from "../index";
+import { BROWSERS, BROWSER_KINDS, BrowserKind, copyProfile, notFoundHint } from "../browsers";
 import { deleteRun, indexCapture, keywordReport, syncCaptures } from "./db";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
-// Supported browsers: where the app lives, where its real profiles live, where we keep our copy
-type BrowserKind = "chrome" | "brave";
-const BROWSERS: Record<BrowserKind, { label: string; exe: string; src: string; copy: string }> = {
-  chrome: {
-    label: "Google Chrome",
-    exe: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    src: path.join(os.homedir(), "Library/Application Support/Google/Chrome"),
-    copy: path.join(os.tmpdir(), "gsa-chrome-profile"),
-  },
-  brave: {
-    label: "Brave",
-    exe: process.env.BRAVE_PATH || "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-    src: path.join(os.homedir(), "Library/Application Support/BraveSoftware/Brave-Browser"),
-    copy: process.env.PROFILE_COPY || path.join(os.tmpdir(), "gsa-brave-profile"),
-  },
-};
+// Browsers (Chrome / Brave) are auto-detected per OS in ../browsers.ts
+const IS_MAC = process.platform === "darwin";
 const PUBLIC = path.join(__dirname, "public");
 const CAPTURES = path.join(__dirname, "captures");
 fs.mkdirSync(CAPTURES, { recursive: true });
@@ -102,8 +88,10 @@ interface ProfileInfo { dir: string; name: string; email?: string }
 
 // Read the browser's profile list (folder + display name) from its "Local State" file
 function listProfiles(kind: BrowserKind): { profiles: ProfileInfo[]; lastUsed?: string; error?: string } {
+  const src = BROWSERS[kind].src;
+  if (!src) return { profiles: [{ dir: "Default", name: "Default" }], error: `${BROWSERS[kind].label} profile folder not found (open the browser once)` };
   try {
-    const ls = JSON.parse(fs.readFileSync(path.join(BROWSERS[kind].src, "Local State"), "utf8"));
+    const ls = JSON.parse(fs.readFileSync(path.join(src, "Local State"), "utf8"));
     const cache = ls?.profile?.info_cache || {};
     const profiles = Object.entries(cache)
       .map(([dir, v]: [string, any]) => ({ dir, name: v?.name || dir, email: v?.user_name || undefined }))
@@ -111,60 +99,62 @@ function listProfiles(kind: BrowserKind): { profiles: ProfileInfo[]; lastUsed?: 
     return { profiles, lastUsed: ls?.profile?.last_used };
   } catch (e: any) {
     const blocked = /EPERM|Operation not permitted/i.test(String(e?.message || e));
-    return { profiles: [{ dir: "Default", name: "Default" }], error: blocked ? "macOS blocked reading the profile list" : undefined };
+    return { profiles: [{ dir: "Default", name: "Default" }], error: blocked ? "The OS blocked reading the profile list" : undefined };
   }
 }
 
 let profileNote = "";
+// Chrome keeps cookies in "<profile>/Network/Cookies" (newer) or "<profile>/Cookies" (older)
+const hasCookies = (dir: string) => fs.existsSync(path.join(dir, "Network", "Cookies")) || fs.existsSync(path.join(dir, "Cookies"));
 
-// Refresh our copy of one profile; if macOS privacy blocks reading the browser's folder, reuse the last copy.
+// Refresh our copy of one profile; if the OS blocks reading the browser's folder, reuse the last copy.
 function syncProfile(kind: BrowserKind, profile: string) {
   const b = BROWSERS[kind];
   profileNote = "";
   try {
-    copyProfile(kind, profile);
+    const { skipped } = copyProfile(kind, profile);
+    if (skipped.some((f) => /(^|[\\/])Cookies$/.test(f))) {
+      // Windows locks the cookie database while the browser is open, so logins could not be copied
+      profileNote = `${b.label} is open, so its cookies/logins could not be copied. Close ${b.label} completely and run again to search signed-in.`;
+      console.warn("[search-automation] " + profileNote);
+    }
   } catch (e: any) {
-    const blocked = /Operation not permitted/i.test(String(e?.message || e));
-    if (fs.existsSync(path.join(b.copy, profile, "Cookies"))) {
-      profileNote = blocked
+    const blocked = /EPERM|Operation not permitted/i.test(String(e?.message || e));
+    if (hasCookies(path.join(b.copy, profile))) {
+      profileNote = blocked && IS_MAC
         ? `Used the last saved ${b.label} profile copy (macOS blocked reading ${b.label}'s folder; give your terminal Full Disk Access to refresh logins)`
-        : `Used the last saved ${b.label} profile copy (refresh failed)`;
+        : `Used the last saved ${b.label} profile copy (refresh failed: ${String(e?.message || e)})`;
       console.warn("[search-automation] " + profileNote);
       return;
     }
     throw new Error(
-      blocked
+      blocked && IS_MAC
         ? `macOS blocked access to ${b.label}'s profile folder. Open System Settings → Privacy & Security → Full Disk Access, enable the app running this server (Terminal / iTerm / VS Code), restart that app, then start the server again.`
         : String(e?.message || e)
     );
   }
 }
 
-function copyProfile(kind: BrowserKind, profile: string) {
-  const { src, copy } = BROWSERS[kind];
-  const ex = ["Cache", "Code Cache", "GPUCache", "Service Worker/CacheStorage", "DawnCache", "GrShaderCache"]
-    .map((e) => `--exclude='${e}'`)
-    .join(" ");
-  execSync(`mkdir -p "${copy}"`);
-  execSync(`cp "${src}/Local State" "${copy}/Local State.tmp"`, { stdio: "pipe" });
-  execSync(`rsync -a --delete ${ex} "${src}/${profile}/" "${copy}/${profile}/"`, { stdio: "pipe" });
-  execSync(`mv "${copy}/Local State.tmp" "${copy}/Local State"`);
-  execSync(`rm -f "${copy}"/Singleton*`);
-}
-
 const COMMON_IGNORE = ["--enable-automation", "--disable-extensions", "--disable-component-extensions-with-background-pages"];
 const COMMON_ARGS = ["--window-size=1400,900", "--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"];
+// Linux as root (Docker, some VMs): Chrome refuses to start without --no-sandbox
+if (process.platform === "linux" && process.getuid?.() === 0) COMMON_ARGS.push("--no-sandbox");
+// Linux without a desktop session (SSH / server): a visible window is impossible, so run headless instead
+const NO_DISPLAY = process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
+const effectiveHeadless = (headless: boolean) => headless || NO_DISPLAY;
 
-function checkInstalled(kind: BrowserKind) {
-  if (!fs.existsSync(BROWSERS[kind].exe)) throw new Error(`${BROWSERS[kind].label} is not installed at ${BROWSERS[kind].exe}`);
+function checkInstalled(kind: BrowserKind): string {
+  const exe = BROWSERS[kind].exe;
+  if (!exe) throw new Error(notFoundHint(kind));
+  return exe;
 }
 
 // Logged-in: a copy of your real browser profile (cookies, Google sign-in, extensions)
 function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean) {
-  checkInstalled(kind);
+  const exe = checkInstalled(kind);
   return puppeteer.launch({
-    executablePath: BROWSERS[kind].exe,
-    headless,
+    executablePath: exe,
+    headless: effectiveHeadless(headless),
     defaultViewport: null,
     userDataDir: BROWSERS[kind].copy,
     ignoreDefaultArgs: COMMON_IGNORE,
@@ -174,10 +164,10 @@ function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean) {
 
 // Incognito: a brand-new empty profile that is deleted afterwards; each query uses its own private context
 function launchIncognito(kind: BrowserKind, tmpDir: string, headless: boolean) {
-  checkInstalled(kind);
+  const exe = checkInstalled(kind);
   return puppeteer.launch({
-    executablePath: BROWSERS[kind].exe,
-    headless,
+    executablePath: exe,
+    headless: effectiveHeadless(headless),
     defaultViewport: null,
     userDataDir: tmpDir,
     ignoreDefaultArgs: COMMON_IGNORE,
@@ -584,10 +574,11 @@ const server = http.createServer(async (req, res) => {
       return json(res, { ok: true });
     }
     if (req.method === "GET" && p === "/api/browsers") {
-      return json(res, (Object.keys(BROWSERS) as BrowserKind[]).map((k) => ({
+      return json(res, BROWSER_KINDS.map((k) => ({
         id: k,
         label: BROWSERS[k].label,
-        installed: fs.existsSync(BROWSERS[k].exe),
+        installed: !!BROWSERS[k].exe,
+        hint: BROWSERS[k].exe ? undefined : notFoundHint(k),
         ...listProfiles(k),
       })));
     }
@@ -609,6 +600,7 @@ const server = http.createServer(async (req, res) => {
       if (!parsed.length) return json(res, { error: "Enter at least one query" }, 400);
       const m: Mode = mode === "incognito" ? "incognito" : "logged-in";
       const kind: BrowserKind = browser === "brave" ? "brave" : "chrome";
+      if (!BROWSERS[kind].exe) return json(res, { error: notFoundHint(kind) }, 400);
       let prof: ProfileInfo | undefined;
       if (m === "logged-in") {
         const { profiles, lastUsed } = listProfiles(kind);
@@ -679,5 +671,9 @@ server.listen(PORT, () => {
   console.log(`Search Automation UI running:`);
   console.log(`  Page 1 (run queries):  http://localhost:${PORT}/`);
   console.log(`  Page 2 (page source):  http://localhost:${PORT}/source`);
-  console.log(`Remember to start the path server: ../.venv/bin/python server/server.py`);
+  for (const k of BROWSER_KINDS) {
+    const b = BROWSERS[k];
+    console.log(b.exe ? `  ${b.label}: ${b.exe}` : `  ${b.label}: not found (option disabled in the UI)`);
+  }
+  console.log(`Remember to start the path server in another terminal: npm run path-server`);
 });
