@@ -6,6 +6,7 @@ import puppeteer, { Browser, Page } from "puppeteer";
 import Humanizer from "../index";
 import { BROWSERS, BROWSER_KINDS, BrowserKind, copyProfile, notFoundHint } from "../browsers";
 import { deleteRun, indexCapture, keywordReport, syncCaptures } from "./db";
+import { dashboardRows, ensureIndexed } from "./search-db";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
@@ -510,6 +511,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html"))
       return send(res, 200, fs.readFileSync(path.join(PUBLIC, "index.html")), "text/html; charset=utf-8");
+    if (req.method === "GET" && (p === "/dashboard" || p === "/dashboard.html"))
+      return send(res, 200, fs.readFileSync(path.join(PUBLIC, "dashboard.html")), "text/html; charset=utf-8");
+    // Combined Search_table + Ads_results_table for the first N searches (oldest first). ?rebuild=1 re-extracts them.
+    if (req.method === "GET" && p === "/api/dashboard") {
+      const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 10, 1), 1000);
+      const { ids } = ensureIndexed(CAPTURES, limit, url.searchParams.get("rebuild") === "1");
+      return json(res, { limit, ...dashboardRows(ids) });
+    }
     if (req.method === "GET" && (p === "/source" || p === "/source.html"))
       return send(res, 200, fs.readFileSync(path.join(PUBLIC, "source.html")), "text/html; charset=utf-8");
     if (req.method === "GET" && p === "/theme.js")
