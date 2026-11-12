@@ -21,3 +21,6 @@ node_modules/
 
 # SQLite ads database (rebuilt from captures)
 search-automation/ui/data/
+
+# App-private Node runtime on servers (see CLAUDE.md)
+.node/
