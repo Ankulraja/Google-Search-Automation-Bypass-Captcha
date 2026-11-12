@@ -58,7 +58,7 @@ export default class Humanizer {
       hesitationDelay = 15,
       clickDelay = 50,
       moveDelay = 0,
-      apiUrl = "http://localhost:3000/generate_path",
+      apiUrl = process.env.PATH_SERVER_URL || `http://127.0.0.1:${process.env.PATH_SERVER_PORT || 3000}/generate_path`,
       visualize = false,
       startPosition = { x: 0, y: 0 },
       wpm = 80,

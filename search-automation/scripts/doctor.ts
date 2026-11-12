@@ -59,14 +59,15 @@ if (process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND
   warn("No display (DISPLAY / WAYLAND_DISPLAY unset): runs are forced to headless.");
 
 // Path server reachable?
-const req = http.get("http://127.0.0.1:3000/generate_path?start_point=0,0&end_point=10,10", (res) => {
+const PATH_PORT = Number(process.env.PATH_SERVER_PORT || 3000);
+const req = http.get(`http://127.0.0.1:${PATH_PORT}/generate_path?start_point=0,0&end_point=10,10`, (res) => {
   res.resume();
-  if (res.statusCode === 200) ok("Path server is running on :3000");
-  else warn(`Path server on :3000 answered ${res.statusCode}`);
+  if (res.statusCode === 200) ok(`Path server is running on :${PATH_PORT}`);
+  else warn(`Path server on :${PATH_PORT} answered ${res.statusCode} (is another app using this port? set PATH_SERVER_PORT)`);
   done();
 });
 req.on("error", () => {
-  warn("Path server is not running on :3000 (start it with: npm run path-server)");
+  warn(`Path server is not running on :${PATH_PORT} (start it with: npm run path-server)`);
   done();
 });
 req.setTimeout(3000, () => req.destroy());

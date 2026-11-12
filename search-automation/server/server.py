@@ -243,4 +243,6 @@ def api_generate_path():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000)
+    # PATH_SERVER_PORT: change it when 3000 is taken (e.g. by a Next.js app on the same server).
+    # PATH_SERVER_HOST: 127.0.0.1 = only this machine can call it (default); 0.0.0.0 = whole network.
+    app.run(host=os.environ.get('PATH_SERVER_HOST', '127.0.0.1'), port=int(os.environ.get('PATH_SERVER_PORT', '3000')))

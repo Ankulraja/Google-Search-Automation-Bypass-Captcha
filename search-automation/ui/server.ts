@@ -10,6 +10,9 @@ import { dashboardRows, ensureIndexed } from "./search-db";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
+// 127.0.0.1 = UI reachable only from this machine (open it through an SSH tunnel on a server); 0.0.0.0 = whole network
+const HOST = process.env.UI_HOST || "127.0.0.1";
+const PATH_PORT = Number(process.env.PATH_SERVER_PORT || 3000);
 // Browsers (Chrome / Brave) are auto-detected per OS in ../browsers.ts
 const IS_MAC = process.platform === "darwin";
 const PUBLIC = path.join(__dirname, "public");
@@ -340,7 +343,7 @@ async function work() {
           job.status = "cancelled";
         } else {
           job.status = "error";
-          job.error = e?.code === "ECONNREFUSED" ? "Path server on :3000 is not running" : String(e?.message || e);
+          job.error = e?.code === "ECONNREFUSED" ? `Path server on :${PATH_PORT} is not running` : String(e?.message || e);
         }
         job.history.push({ pass: job.pass, status: job.status });
         if (job.freshBrowser) await closeBrowser(); // a failed keyword must not leave its browser behind
@@ -593,7 +596,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && p === "/api/health") {
       const pathServer = await new Promise<boolean>((resolve) => {
-        const r = http.get("http://127.0.0.1:3000/generate_path?start_point=0,0&end_point=10,10", (resp) => { resp.resume(); resolve(resp.statusCode === 200); });
+        const r = http.get(`http://127.0.0.1:${PATH_PORT}/generate_path?start_point=0,0&end_point=10,10`, (resp) => { resp.resume(); resolve(resp.statusCode === 200); });
         r.on("error", () => resolve(false));
         r.setTimeout(3000, () => { r.destroy(); resolve(false); });
       });
@@ -676,10 +679,12 @@ try {
   console.error("[search-automation] could not sync captures into SQLite:", e?.message || e);
 }
 
-server.listen(PORT, () => {
-  console.log(`Search Automation UI running:`);
+server.listen(PORT, HOST, () => {
+  console.log(`Search Automation UI running on ${HOST}:${PORT}:`);
   console.log(`  Page 1 (run queries):  http://localhost:${PORT}/`);
   console.log(`  Page 2 (page source):  http://localhost:${PORT}/source`);
+  console.log(`  Page 3 (dashboard):    http://localhost:${PORT}/dashboard`);
+  console.log(`  Path server expected on port ${PATH_PORT}`);
   for (const k of BROWSER_KINDS) {
     const b = BROWSERS[k];
     console.log(b.exe ? `  ${b.label}: ${b.exe}` : `  ${b.label}: not found (option disabled in the UI)`);

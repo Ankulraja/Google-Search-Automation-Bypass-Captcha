@@ -75,8 +75,20 @@ Quick smoke test without Google: `npm test local-demo.ts` (opens a local page an
 | `CHROME_PROFILE_DIR`, `BRAVE_PROFILE_DIR` | The browser's "User Data" folder (contains `Local State`) |
 | `CHROME_PROFILE_COPY`, `BRAVE_PROFILE_COPY` (`PROFILE_COPY` = Brave, legacy) | Where the profile copy is kept (default: OS temp dir) |
 | `UI_PORT` | UI port (default 4000) |
+| `UI_HOST` | Address the UI listens on: `127.0.0.1` (default, this machine only) or `0.0.0.0` (whole network: the UI has no login, avoid on shared servers) |
+| `PATH_SERVER_PORT` | Path server port (default 3000). Set the **same value** for `npm run path-server` and `npm run ui` |
+| `PATH_SERVER_HOST` | Address the path server listens on (default `127.0.0.1`) |
 
 Setting env vars: macOS/Linux `CHROME_PATH="/path" npm run ui`; PowerShell `$env:CHROME_PATH="C:\...\chrome.exe"; npm run ui`; cmd `set CHROME_PATH=C:\...\chrome.exe && npm run ui`.
+
+## Running on a Linux server (stage)
+
+- Install next to other apps in its own folder, e.g. `~/public_html/google-search-automation`. Never inside another app's folder.
+- Check free ports first: `ss -ltnp | grep -E ':3000|:4000'`. If 3000 is taken (Next.js apps use it), pick e.g. `PATH_SERVER_PORT=3100` and use it for **both** servers.
+- No display on a server: runs are always headless. Only **Incognito** mode makes sense, because there's no logged-in browser profile on the server.
+- Browser: system Chrome (`google-chrome`) if installed; otherwise `npx puppeteer browsers install chrome` and set `CHROME_PATH` to the printed path. That Chrome needs system libraries (nss, atk, gtk3, …). If it fails to start, an admin must install them.
+- Keep both servers running with `pm2` (or `nohup`). Both listen on `127.0.0.1` only; open the UI from a laptop through an SSH tunnel: `ssh -L 4000:127.0.0.1:4000 <user>@<server>`, then http://localhost:4000.
+- Saved pages (`ui/captures/`) and databases (`ui/data/`) are not in git. Copy them over separately (`rsync`) if the server should show existing data.
 
 ## Troubleshooting
 
