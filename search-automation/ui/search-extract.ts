@@ -23,6 +23,7 @@ export interface PageAd {
   brand_status: "found" | "not_in_ad" | "unbranded" | "unresolved";
   price: number | null;
   image_url: string | null;
+  image_data?: string | null; // embedded picture ("data:image/…;base64,…") when the page has no web link for it
   url_of_product: string | null;
 }
 
@@ -91,7 +92,21 @@ function classify($: cheerio.CheerioAPI, el: cheerio.Cheerio<any>): SectionType 
   return "other";
 }
 
+// Google fills many result images later from script maps (google.ldi / google.ldilf):
+// "dimg_…" / "plathumb…" -> "https://encrypted-tbn0.gstatic.com/…". Read the http links from the raw page.
+function imageLinkMap(html: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of html.matchAll(/"([A-Za-z]+\d*_[\w-]+)":"(https:\/\/[^"]+)"/g)) {
+    let url = m[2];
+    try { url = JSON.parse(`"${url}"`); } catch {} // undo \u003d etc.
+    if (/^https:\/\/encrypted-tbn\d\.gstatic\.com\//.test(url) || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url)) map.set(m[1], url);
+  }
+  return map;
+}
+let IMG_LINKS = new Map<string, string>(); // for the page being extracted
+
 export function extractPage(html: string): ExtractedPage {
+  IMG_LINKS = imageLinkMap(html);
   const $ = cheerio.load(html);
   $("script, style, noscript").remove();
 
@@ -184,6 +199,41 @@ function storeLine(texts: string[], title: string): string | null {
   return texts.slice(i + 1).find((t) => t !== title && t.length >= 2 && t.length <= 40 && !/[₹%]|^\d|off$|delivery|returns|^(free|ad)$/i.test(t)) || null;
 }
 
+// Some sellers' shopping ads carry no landing address in Google's link ("adurl=" is empty). Their
+// data-offer-id is the seller's own product id from the Shopping feed, so the product page can be built from it.
+// Only for sellers whose product-page pattern is known; anything else stays NULL.
+function urlFromOfferId(domain: string | null, offerId?: string): string | null {
+  if (!domain || !offerId) return null;
+  if ((domain === "indiamart.com" || domain.endsWith(".indiamart.com")) && /^\d{6,15}$/.test(offerId))
+    return `https://www.indiamart.com/proddetail/${offerId}.html`;
+  if (/^amazon\.(in|com)$/.test(domain) && /^[A-Z0-9]{10}$/.test(offerId))
+    return `https://www.${domain}/dp/${offerId}`;
+  return null;
+}
+
+// Real http link of the product picture inside `el`, or null when the page only has it as embedded image data.
+// Store logos ("tsuid_…") are skipped.
+function productImage($: cheerio.CheerioAPI, el: cheerio.Cheerio<any>): string | null {
+  for (const im of el.find("img").toArray()) {
+    const i = $(im), id = i.attr("id") || i.attr("data-iid") || "";
+    if (id.startsWith("tsuid_")) continue;
+    const url = httpOnly(i.attr("src")) || httpOnly(i.attr("data-src")) || (id ? IMG_LINKS.get(id) || null : null);
+    if (url && !/^https:\/\/(ssl|www)\.gstatic\.com\//.test(url)) return url; // skip Google's own icons (WhatsApp, call, …)
+  }
+  return null;
+}
+
+// The product picture embedded in the page itself (no web link exists for it). Tiny placeholders are ignored.
+function productImageData($: cheerio.CheerioAPI, el: cheerio.Cheerio<any>): string | null {
+  for (const im of el.find("img").toArray()) {
+    const i = $(im), id = i.attr("id") || "";
+    if (id.startsWith("tsuid_")) continue; // store logo
+    const src = i.attr("src") || "";
+    if (/^data:image\/(webp|jpe?g|png|gif);base64,/.test(src) && src.length > 1500) return src;
+  }
+  return null;
+}
+
 function extractAds($: cheerio.CheerioAPI, sec: cheerio.Cheerio<any>, leaves: (r: cheerio.Cheerio<any>) => string[]): PageAd[] {
   const ads: PageAd[] = [];
   const outermost = (sel: string) => sec.find(sel).add(sec.filter(sel)).filter((_, e) => $(e).parents(sel).length === 0);
@@ -222,7 +272,7 @@ function extractAds($: cheerio.CheerioAPI, sec: cheerio.Cheerio<any>, leaves: (r
     if (!url) url = realUrl(shown); // last resort: the website shown on the ad
     ads.push({
       ads_type: "search_ads", relative_ads_position: ads.length + 1, title, description: desc, advertiser_name: name,
-      domain, ...brandOf(title, domain), price: null, image_url: httpOnly(a.find("img").first().attr("src")), url_of_product: url,
+      domain, ...brandOf(title, domain), price: null, image_url: productImage($, a), image_data: productImageData($, a), url_of_product: url,
     });
   });
 
@@ -248,12 +298,11 @@ function extractAds($: cheerio.CheerioAPI, sec: cheerio.Cheerio<any>, leaves: (r
     const label = u.attr("aria-label") || "";
     const fromMatch = label.match(/(?:^|\s)from\s+(.+?)(?:,|$)/i);
     const name = clean(fromMatch?.[1] || "") || clean(card.find(".UsGWMe").first().text()) || storeLine(texts, title) || domain;
-    let img: string | null = null;
-    card.find("img").each((_, im) => { img = img || httpOnly($(im).attr("src")) || httpOnly($(im).attr("data-src")); });
+    const img = productImage($, card);
     ads.push({
       ads_type: "shopping_ads", relative_ads_position: ads.length + 1, title: title || null, description: null,
-      advertiser_name: name, domain, ...brandOf(title, domain), price, image_url: img,
-      url_of_product: realUrl(u.attr("href")) || realUrl(u.find("a[href]").first().attr("href")),
+      advertiser_name: name, domain, ...brandOf(title, domain), price, image_url: img, image_data: img ? null : productImageData($, card),
+      url_of_product: realUrl(u.attr("href")) || realUrl(u.find("a[href]").first().attr("href")) || urlFromOfferId(domain, u.attr("data-offer-id")),
     });
   });
   return ads;

@@ -64,7 +64,20 @@ export interface SearchMeta {
 const IST = { timeZone: "Asia/Kolkata" } as const;
 
 /** Parse one saved page and (re)write its Search_table row and Ads_results_table rows. */
-export function indexSearch(meta: SearchMeta, html: string, htmlPath: string) {
+// Embedded pictures are saved here; image_url then holds "images/<ad_id>.<ext>" (relative to the captures folder, like html_path)
+export const IMAGES_SUBDIR = "images";
+function saveEmbeddedImage(capturesDir: string, adId: string, dataUri: string): string | null {
+  const m = dataUri.match(/^data:image\/(webp|jpe?g|png|gif);base64,(.+)$/);
+  if (!m) return null;
+  const ext = m[1] === "jpeg" ? "jpg" : m[1];
+  const dir = path.join(capturesDir, IMAGES_SUBDIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `${adId}.${ext}`;
+  fs.writeFileSync(path.join(dir, name), Buffer.from(m[2], "base64"));
+  return `${IMAGES_SUBDIR}/${name}`;
+}
+
+export function indexSearch(meta: SearchMeta, html: string, htmlPath: string, capturesDir?: string) {
   const page = extractPage(html);
   const when = new Date(meta.capturedAt);
   db.exec("BEGIN");
@@ -93,11 +106,15 @@ export function indexSearch(meta: SearchMeta, html: string, htmlPath: string) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const s of page.sections)
-        for (const a of s.ads)
+        for (const a of s.ads) {
+          const adId = `${meta.id}-${s.rank}-${a.relative_ads_position}`;
+          // web link if Google gave one, otherwise the picture embedded in the page, saved as a file
+          const image = a.image_url || (a.image_data && capturesDir ? saveEmbeddedImage(capturesDir, adId, a.image_data) : null);
           ins.run(
-            `${meta.id}-${s.rank}-${a.relative_ads_position}`, meta.id, a.ads_type, a.title, a.description, a.advertiser_name,
-            a.domain, a.brand, a.brand_status, a.price, a.image_url, a.url_of_product, s.rank, a.relative_ads_position
+            adId, meta.id, a.ads_type, a.title, a.description, a.advertiser_name,
+            a.domain, a.brand, a.brand_status, a.price, image, a.url_of_product, s.rank, a.relative_ads_position
           );
+        }
     }
     db.exec("COMMIT");
   } catch (e) {
@@ -120,7 +137,7 @@ export function ensureIndexed(capturesDir: string, limit: number, rebuild = fals
     if (!rebuild && has.get(m.id)) continue;
     const file = path.join(capturesDir, `${m.id}.html`);
     if (!fs.existsSync(file)) continue;
-    indexSearch(m, fs.readFileSync(file, "utf8"), `${m.id}.html`);
+    indexSearch(m, fs.readFileSync(file, "utf8"), `${m.id}.html`, capturesDir);
     indexed++;
   }
   return { ids: metas.map((m) => m.id), indexed };

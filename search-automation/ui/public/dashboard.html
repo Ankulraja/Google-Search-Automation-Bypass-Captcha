@@ -23,7 +23,13 @@
   }
   body, button, input, select { font-family: var(--font); }
   body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
-  main { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; }
+  /* Fill the window: header on top, then main; the table takes all the height that is left */
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  header.top { flex: none; }
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px; }
+  main > * { flex: none; }
+  main > .tablewrap { flex: 1 1 auto; min-height: 220px; }
 
   .head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
   .head h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
@@ -35,21 +41,27 @@
   .controls input { width: 240px; }
   .controls button { height: 34px; font-size: 13px; font-weight: 500; }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
-  .stat .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-  .stat .k { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  /* Totals: number and label on one line to keep the cards short */
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stats .stat { flex: 1 1 auto; }
+  .stat { display: flex; align-items: baseline; gap: 7px; min-width: 0; padding: 7px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  .stat .v { flex: none; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.25; }
+  .stat .k { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text); font-weight: 500; }
 
   /* ---------- Grid table ---------- */
-  .tablewrap { border: 1px solid var(--grid); border-radius: 8px; overflow: auto; max-height: calc(100vh - 320px); background: var(--panel); }
-  table.grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-  table.grid th, table.grid td { border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); padding: 7px 12px; text-align: left; vertical-align: top; white-space: nowrap; }
+  .tablewrap { border: 1px solid var(--grid); border-radius: 8px; overflow: auto; background: var(--panel); }
+  /* Width by need: "fit" columns shrink to their content, "mid" columns get a moderate width, text columns take the rest */
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.grid .fit { width: 1%; }
+  table.grid td.idw { white-space: normal; min-width: 170px; max-width: 200px; } /* long ids: up to 2 lines */
+  .c2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 19px; max-height: 38px; }
+  table.grid th.idw { min-width: 170px; }
+  table.grid td.mid, table.grid th.mid { width: 1%; min-width: 150px; max-width: 220px; white-space: normal; }
+  table.grid th, table.grid td { border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); padding: 7px 10px; text-align: left; vertical-align: top; white-space: nowrap; }
   table.grid tr > :last-child { border-right: 0; }
   table.grid thead th { position: sticky; z-index: 3; background: var(--head-bg); color: var(--text); font-weight: 600; font-size: 12.5px; text-transform: none; letter-spacing: 0; }
-  table.grid thead tr.grp th { top: 0; height: 34px; font-size: 12px; font-weight: 700; text-align: center; letter-spacing: .02em; }
-  table.grid thead tr.grp th.gs { background: var(--grp-search); }
-  table.grid thead tr.grp th.ga { background: var(--grp-ads); }
-  table.grid thead tr.cols th { top: 34px; border-bottom: 2px solid var(--grid); }
+  table.grid thead tr.cols th { top: 0; height: 38px; vertical-align: middle; border-bottom: 2px solid var(--grid); }
+  table.grid thead th .th-in > span { line-height: 1.25; white-space: normal; }
   table.grid thead th.idx, table.grid td.idx { position: sticky; left: 0; z-index: 2; text-align: right; color: var(--muted); font-weight: 500; background: var(--head-bg); min-width: 44px; }
   table.grid thead th.idx { z-index: 4; }
   table.grid tbody tr:nth-child(even) td { background: var(--zebra); }
@@ -57,7 +69,7 @@
   table.grid tbody tr:hover td { background: var(--hover); }
   /* Same height for every row: 2 lines of text + padding; longer text is cut with "Read more" */
   table.grid tbody td { height: 54px; vertical-align: middle; }
-  table.grid td.wrap { white-space: normal; width: 320px; min-width: 320px; max-width: 320px; position: relative; }
+  table.grid td.wrap { white-space: normal; min-width: 230px; position: relative; }
   .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 19px; max-height: 38px; }
   .more { display: none; position: absolute; right: 8px; bottom: 7px; padding: 0 0 0 26px; border: 0; border-radius: 0; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; line-height: 19px;
     background: linear-gradient(to right, transparent, var(--cell-bg, var(--panel)) 22px); }
@@ -72,18 +84,115 @@
   #full .fh b { font-size: 14px; } #full .fh span { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
   #full .fb { padding: 16px 18px 20px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; max-height: 60vh; overflow: auto; }
   table.grid td.num, table.grid th.num { text-align: right; }
-  table.grid .sep { border-left: 2px solid var(--grid); }
   .null { color: var(--muted); opacity: .55; font-size: 12px; }
   .t-search_ads { color: var(--accent); font-weight: 600; } .t-shopping_ads { color: var(--ok); font-weight: 600; }
   .st-ok { color: var(--ok); font-weight: 600; } .st-captcha { color: var(--warn); font-weight: 600; } .st-error { color: var(--err); font-weight: 600; }
   .b-found { color: var(--ok); font-weight: 600; }
-  .clip { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  .clip { display: inline-block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
-  .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 13px; }
-  .pager #pinfo { margin-right: 6px; font-variant-numeric: tabular-nums; }
-  .pager button { height: 32px; font-size: 13px; }
-  .legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--muted); align-items: center; flex-wrap: wrap; }
-  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 1px solid var(--grid); }
+  .pager { display: flex; gap: 4px; align-items: center; font-size: 13px; margin-right: 6px; }
+  .pager #pinfo { margin-right: 6px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pager button { width: 32px; height: 32px; padding: 0; font-size: 18px; line-height: 1; }
+  [hidden] { display: none !important; }
+  /* ---------- Filters toolbar ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .sbox { position: relative; }
+  .sbox svg { position: absolute; left: 10px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .sbox input { width: 185px; height: 34px; padding: 0 10px 0 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 13px; font-family: var(--font); }
+  .sbox input:focus, .combo:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .combo { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 34px; width: 215px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
+  .combo input { flex: 1; min-width: 90px; height: 26px; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; font-family: var(--font); padding: 0 4px; }
+  .tag { display: inline-flex; align-items: center; gap: 2px; height: 24px; max-width: 200px; padding: 0 2px 0 8px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); color: var(--accent); font-size: 12px; font-weight: 600; }
+  .tag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag button { height: 20px; width: 20px; padding: 0; border: 0; border-radius: 10px; background: none; color: inherit; font-size: 14px; line-height: 1; }
+  .tag button:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+  .dd { position: absolute; top: calc(100% + 4px); left: 0; width: 320px; max-height: 320px; overflow: auto; z-index: 30; background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 4px; }
+  .dd .it { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .dd .it.act, .dd .it:hover { background: var(--hover); }
+  .dd .it small, .dd .none { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .dd .none { padding: 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--panel); }
+  .seg button { height: 32px; padding: 0 12px; border: 0; border-radius: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.on { background: color-mix(in srgb, var(--accent) 13%, var(--panel)); color: var(--accent); font-weight: 600; }
+  .tbtn { height: 34px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  .tbtn.act { border-color: var(--accent); color: var(--accent); }
+  .nbadge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+  .pop-wrap { position: relative; }
+  .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; display: flex; flex-direction: column; gap: 14px; min-width: 360px; padding: 16px; background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.2); }
+  .pop.right { left: auto; right: 0; width: min(760px, 92vw); }
+  .pop .pl { font-size: 12.5px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opts button, .quick button { height: 30px; padding: 0 12px; border-radius: 15px; font-size: 12.5px; font-weight: 500; color: var(--text); }
+  .opts button.on, .quick button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, var(--panel)); color: var(--accent); font-weight: 600; }
+  .quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; justify-content: center; }
+  .quick .ql { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+  button.link { border: 0; background: none; padding: 0 4px; color: var(--accent); font-size: 13px; font-weight: 500; }
+  button.link:hover { text-decoration: underline; }
+  .popfoot { display: flex; justify-content: flex-end; }
+  #dlBtn svg { width: 15px; height: 15px; }
+  .pop.dlpop { width: 250px; min-width: 0; padding: 6px; gap: 2px; }
+  .dli { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; height: auto; padding: 8px 10px; border: 0; background: none; text-align: left; }
+  .dli:hover { background: var(--hover); }
+  .dli b { font-size: 13px; } .dli small { font-size: 11.5px; color: var(--muted); }
+  /* Date & time filter */
+  #dtBtn svg { width: 15px; height: 15px; flex: none; }
+  #dtLabel { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #dtPop { width: 430px; }
+  .dtf { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--text); }
+  .dtf input { width: 100%; min-width: 0; box-sizing: border-box; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font: 13px var(--font); }
+  .dtf input:focus { outline: none; border-color: var(--accent); }
+  .pop .hint { font-size: 12px; color: var(--text); margin-top: 5px; }
+  .pop .cfrow { display: flex; gap: 8px; }
+  .dtfoot { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .dtfoot .sp { flex: 1; }
+  .dtfoot button:not(.link) { height: 32px; padding: 0 16px; font-size: 13px; }
+  /* Column header filters (Excel-style) */
+  .th-in { display: flex; align-items: center; gap: 2px; }
+  th.num .th-in { justify-content: flex-end; }
+  .fbtn { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: .4; cursor: pointer; }
+  .fbtn svg { width: 11px; height: 11px; }
+  table.grid thead th:hover .fbtn, .fbtn:focus-visible, .fbtn.open { opacity: 1; }
+  .fbtn:hover, .fbtn.open { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  table.grid thead th.cf-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--head-bg)); }
+  th.cf-on .fbtn { opacity: 1; background: var(--accent); color: var(--accent-text); }
+  #cfpop { position: fixed; z-index: 40; width: 290px; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.22); font-size: 13px; }
+  #cfpop.wide { width: 360px; }
+  #cfpop .pl { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  #cfpop .hint { color: var(--text); }
+  #cfpop .cfh { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #cfpop .cfh b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #cfpop input[type=search], #cfpop input[type=number] { width: 100%; height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font: 13px var(--font); }
+  #cfpop input:focus { outline: none; border-color: var(--accent); }
+  #cfpop .cfrow { display: flex; gap: 8px; }
+  #cfpop .cfacts { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  #cfpop .cflist { max-height: 250px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+  #cfpop label.cfi { display: flex; align-items: center; gap: 8px; padding: 5px 9px; font-size: 12.5px; cursor: pointer; }
+  #cfpop label.cfi:hover { background: var(--hover); }
+  #cfpop label.cfi span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #cfpop label.cfi small, #cfpop .none, #cfpop .hint { color: var(--muted); font-size: 11.5px; }
+  #cfpop .none { padding: 8px 9px; }
+  /* Column chooser: full-width row above the table; chips fill the row next to the button */
+  /* One bar: Columns + Reset on the left, Date & time / Clear all / Download on the right; column chips below */
+  .colrow { display: flex; flex-direction: column; gap: 6px; }
+  .colrow .bar { display: flex; align-items: center; gap: 8px; }
+  .colrow .bar .sp { flex: 1; }
+  .colrow .bar .tbtn { height: 32px; }
+  .colside { display: flex; align-items: center; gap: 2px; flex: none; }
+  #coltoggle { height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  #coltoggle .car { display: inline-block; font-size: 10px; transition: transform .15s; }
+  .colrow.closed #coltoggle .car { transform: rotate(-90deg); }
+  .colrow.closed .chips { display: none; }
+  #colreset { font-size: 12.5px; }
+  .colrow .chips { gap: 5px; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  .colrow .chip { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--grid); background: var(--panel); color: var(--muted); font-style: italic; }
+  .chip.on { font-style: normal; font-weight: 500; color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--grid)); background: color-mix(in srgb, var(--accent) 9%, var(--panel)); }
+  .chip:hover { border-color: var(--accent); }
+  .chip.dragging { opacity: .4; }
+  .chip.drop-before { box-shadow: -3px 0 0 var(--accent); }
 </style>
 </head>
 <body>
@@ -97,20 +206,49 @@
   </button>
 </header>
 <main>
-  <div class="head">
-    <h2>Combined table</h2>
-    <div class="controls">
-      <button id="csv">Download CSV</button>
-      <button id="xlsx" class="primary" title="Opens in Excel and Google Sheets (File → Import)">Download Excel (.xlsx)</button>
-    </div>
-  </div>
-
   <div class="stats" id="stats"></div>
-  <div class="legend"><span><i style="background:var(--grp-search)"></i>Search_table columns</span><span><i style="background:var(--grp-ads)"></i>Ads_results_table columns</span><span id="note"></span></div>
-
+  <div class="colrow" id="colrow">
+    <div class="bar">
+      <div class="colside">
+      <button id="coltoggle" class="tbtn" type="button" aria-expanded="true" title="Click a column to show or hide it; drag to reorder"><span class="car">▾</span> <span id="colcount">Columns</span></button>
+      <button id="colreset" class="link" type="button">Reset</button>
+      </div>
+      <span class="sp"></span>
+      <div class="pager"><span id="pinfo"></span><button id="prev" type="button" title="Previous page" aria-label="Previous page">‹</button><button id="next" type="button" title="Next page" aria-label="Next page">›</button></div>
+      <div class="pop-wrap">
+        <button id="dtBtn" class="tbtn" type="button" aria-expanded="false" title="Filter by search date and time (India time)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <span id="dtLabel">Any time</span> ▾</button>
+        <div class="pop" id="dtPop" hidden>
+          <div><div class="pl">Quick ranges</div>
+            <div class="opts" id="dtPresets">
+              <button type="button" data-v="1h">Last 1 hour</button><button type="button" data-v="24h">Last 24 hours</button>
+              <button type="button" data-v="today">Today</button><button type="button" data-v="yday">Yesterday</button>
+              <button type="button" data-v="7d">Last 7 days</button><button type="button" data-v="30d">Last 30 days</button>
+            </div></div>
+          <div><div class="pl">Custom range (date &amp; time)</div>
+            <div class="cfrow"><label class="dtf">From<input type="datetime-local" id="dtFrom"></label><label class="dtf">To<input type="datetime-local" id="dtTo"></label></div></div>
+          <div><div class="pl">Time of day (on any date)</div>
+            <div class="cfrow"><label class="dtf">From<input type="time" id="todFrom"></label><label class="dtf">To<input type="time" id="todTo"></label></div>
+            <div class="hint">e.g. 10:00 – 13:00 keeps searches made in that window on every day; 22:00 – 02:00 works across midnight.</div></div>
+          <div class="dtfoot"><button class="link" type="button" id="dtClear">Clear</button><span class="sp"></span><button type="button" id="dtCancel">Cancel</button><button type="button" class="primary" id="dtApply">Apply</button></div>
+        </div>
+      </div>
+      <button id="clearAll" class="link" type="button" hidden title="Clear every filter">Clear all</button>
+      <div class="pop-wrap dl-wrap">
+        <button id="dlBtn" class="tbtn" type="button" aria-expanded="false" title="Download the rows shown (all columns)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg> Download ▾</button>
+        <div class="pop right dlpop" id="dlPop" hidden>
+          <button id="xlsx" type="button" class="dli"><b>Excel (.xlsx)</b><small>Opens in Excel and Google Sheets</small></button>
+          <button id="csv" type="button" class="dli"><b>CSV</b><small>Plain text, any tool</small></button>
+        </div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
   <div class="tablewrap"><table class="grid" id="tbl"><tbody><tr><td class="empty">Loading…</td></tr></tbody></table></div>
-  <div class="pager"><span id="pinfo" class="muted"></span><button id="prev" type="button">‹ Previous</button><button id="next" type="button">Next ›</button></div>
 </main>
+<div id="cfpop" hidden role="dialog" aria-label="Column filter"></div>
 <dialog id="full">
   <div class="fh"><div><b id="fcol"></b><span id="fctx"></span></div><button id="fclose" type="button">Close</button></div>
   <div class="fb" id="ftext"></div>
@@ -125,31 +263,31 @@ const v = (x) => (isNull(x) ? NULL : esc(x));
 
 // [group, column, render, cell class]; group: s = Search_table, a = Ads_results_table
 const COLS = [
-  ["s", "search_id", (r) => esc(r.search_id)],
-  ["s", "mcat_id", (r) => v(r.mcat_id), "num"],
-  ["s", "search_keyword", (r) => `<b>${v(r.search_keyword)}</b>`],
-  ["s", "search_date", (r) => v(r.search_date)],
-  ["s", "search_time", (r) => v(r.search_time)],
-  ["s", "location", (r) => v(r.location)],
-  ["s", "ip_address", (r) => v(r.ip_address)],
-  ["s", "device", (r) => v(r.device)],
-  ["s", "run_mode", (r) => v(r.run_mode)],
-  ["s", "window_mode", (r) => v(r.window_mode)],
-  ["s", "status", (r) => `<span class="st-${esc(r.status)}">${esc(r.status)}</span>`],
-  ["s", "html_path", (r) => r.html_path ? `<a class="clip" href="/view-page/${encodeURIComponent(r.search_id)}" target="_blank" title="Open saved page">${esc(r.html_path)}</a>` : NULL],
-  ["a", "ad_id", (r) => v(r.ad_id)],
-  ["a", "ads_type", (r) => r.ads_type ? `<span class="t-${esc(r.ads_type)}">${esc(r.ads_type)}</span>` : NULL],
-  ["a", "absolute_ads_position", (r) => v(r.absolute_ads_position), "num"],
-  ["a", "relative_ads_position", (r) => v(r.relative_ads_position), "num"],
+  ["s", "search_id", (r) => two(esc(r.search_id), r.search_id), "fit idw"],
+  ["s", "mcat_id", (r) => v(r.mcat_id), "num fit"],
+  ["s", "search_keyword", (r) => two(`<b>${v(r.search_keyword)}</b>`, r.search_keyword), "mid"],
+  ["s", "search_date", (r) => v(r.search_date), "fit"],
+  ["s", "search_time", (r) => v(r.search_time), "fit"],
+  ["s", "location", (r) => v(r.location), "fit"],
+  ["s", "ip_address", (r) => v(r.ip_address), "fit"],
+  ["s", "device", (r) => v(r.device), "fit"],
+  ["s", "run_mode", (r) => v(r.run_mode), "fit"],
+  ["s", "window_mode", (r) => v(r.window_mode), "fit"],
+  ["s", "status", (r) => `<span class="st-${esc(r.status)}">${esc(r.status)}</span>`, "fit"],
+  ["s", "html_path", (r) => r.html_path ? `<a class="clip" href="/view-page/${encodeURIComponent(r.search_id)}" target="_blank" title="Open saved page">${esc(r.html_path)}</a>` : NULL, "fit"],
+  ["a", "ad_id", (r) => (r.ad_id ? two(esc(r.ad_id), r.ad_id) : NULL), "fit idw"],
+  ["a", "ads_type", (r) => r.ads_type ? `<span class="t-${esc(r.ads_type)}">${esc(r.ads_type)}</span>` : NULL, "fit"],
+  ["a", "absolute_ads_position", (r) => v(r.absolute_ads_position), "num fit"],
+  ["a", "relative_ads_position", (r) => v(r.relative_ads_position), "num fit"],
   ["a", "title", (r, i) => longText(r, i, "title"), "wrap"],
   ["a", "description", (r, i) => longText(r, i, "description"), "wrap"],
-  ["a", "advertiser_name", (r) => v(r.advertiser_name)],
-  ["a", "domain", (r) => v(r.domain)],
-  ["a", "brand", (r) => v(r.brand)],
-  ["a", "brand_status", (r) => r.brand_status ? `<span class="b-${esc(r.brand_status)}">${esc(r.brand_status)}</span>` : NULL],
-  ["a", "price", (r) => (r.price == null ? NULL : "₹" + Number(r.price).toLocaleString("en-IN")), "num"],
-  ["a", "image_url", (r) => r.image_url ? `<a class="clip" href="${esc(r.image_url)}" target="_blank" rel="noopener noreferrer">${esc(r.image_url)}</a>` : NULL],
-  ["a", "url_of_product", (r) => r.url_of_product ? `<a class="clip" href="${esc(r.url_of_product)}" target="_blank" rel="noopener noreferrer" title="${esc(r.url_of_product)}">${esc(r.url_of_product.replace(/^https?:\/\/(www\.)?/, ""))}</a>` : NULL],
+  ["a", "advertiser_name", (r) => (r.advertiser_name ? two(esc(r.advertiser_name), r.advertiser_name) : NULL), "mid"],
+  ["a", "domain", (r) => v(r.domain), "fit"],
+  ["a", "brand", (r) => v(r.brand), "fit"],
+  ["a", "brand_status", (r) => r.brand_status ? `<span class="b-${esc(r.brand_status)}">${esc(r.brand_status)}</span>` : NULL, "fit"],
+  ["a", "price", (r) => (r.price == null ? NULL : "₹" + Number(r.price).toLocaleString("en-IN")), "num fit"],
+  ["a", "image_url", (r) => r.image_url ? `<a href="${esc(/^https?:/.test(r.image_url) ? r.image_url : "/" + r.image_url)}" target="_blank" rel="noopener noreferrer" title="${esc(/^https?:/.test(r.image_url) ? r.image_url : "Saved from the page: " + r.image_url)}">View image ↗</a>` : NULL, "fit"],
+  ["a", "url_of_product", (r) => r.url_of_product ? `<a class="clip" href="${esc(r.url_of_product)}" target="_blank" rel="noopener noreferrer" title="${esc(r.url_of_product)}">${esc(r.url_of_product.replace(/^https?:\/\/(www\.)?/, ""))}</a>` : NULL, "fit"],
 ];
 // Long text: shown on at most 2 lines; "Read more" appears only when the text is cut (see markOverflow)
 function longText(r, i, col) {
@@ -163,63 +301,280 @@ function markOverflow() {
   tds.forEach((td, i) => td.classList.toggle("over", over[i]));
 }
 function openFull(rowIdx, col) {
-  const r = data.rows[rowIdx];
+  const r = view[rowIdx];
   $("#fcol").textContent = col === "title" ? "Title" : "Description";
   $("#fctx").textContent = [r.search_keyword, r.advertiser_name, r.ads_type, r.ad_id].filter(Boolean).join(" · ");
   $("#ftext").textContent = r[col];
   $("#full").showModal();
 }
 const S_COUNT = COLS.filter((c) => c[0] === "s").length;
+// Header text may break after "_" so narrow columns stay narrow; short pieces (id, ip) stay attached
+const hdrLabel = (n) => n.split("_").reduce((acc, part, i, arr) => acc + part + (i < arr.length - 1 ? (part.length >= 3 && arr[i + 1].length >= 3 ? "_<wbr>" : "_") : ""), "");
+// Cell text cut at 2 lines (full text on hover), so every row keeps the same height
+const two = (html, full) => `<div class="c2" title="${esc(full ?? "")}">${html}</div>`;
+const BY_NAME = Object.fromEntries(COLS.map((c) => [c[1], c]));
+
+// Column order (all 26) and the ones shown at first. Hidden columns sit at their place in this order,
+// so adding one puts it in its proper position.
+const DEFAULT_ORDER = [
+  "search_id", "search_date", "search_time", "mcat_id", "search_keyword", "location", "ip_address", "device", "run_mode", "window_mode", "status", "html_path",
+  "ad_id", "ads_type", "absolute_ads_position", "relative_ads_position", "title", "description", "advertiser_name", "domain", "brand", "brand_status",
+  "price", "image_url", "url_of_product",
+];
+const DEFAULT_SHOWN = ["search_date", "search_time", "mcat_id", "search_keyword", "ads_type", "title", "advertiser_name", "price", "image_url", "url_of_product"];
+const LS_KEY = "gsa-dashboard-columns-v2";
+let order = [...DEFAULT_ORDER];
+let shown = new Set(DEFAULT_SHOWN);
+try {
+  const saved = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+  if (saved && Array.isArray(saved.order) && Array.isArray(saved.shown)) {
+    // keep only known columns; append any new ones
+    order = [...saved.order.filter((c) => BY_NAME[c]), ...DEFAULT_ORDER.filter((c) => !saved.order.includes(c))];
+    shown = new Set(saved.shown.filter((c) => BY_NAME[c]));
+  }
+} catch (e) {}
+const saveCols = () => { try { localStorage.setItem(LS_KEY, JSON.stringify({ order, shown: [...shown] })); } catch (e) {} };
+const visibleCols = () => order.filter((c) => shown.has(c)).map((c) => BY_NAME[c]);
+
+function renderChips() {
+  $("#chips").innerHTML = order.map((c) =>
+    `<span class="chip g-${BY_NAME[c][0]}${shown.has(c) ? " on" : ""}" draggable="true" data-col="${c}" role="checkbox" aria-checked="${shown.has(c)}" tabindex="0">${c}</span>`).join("");
+  $("#colcount").textContent = `Columns ${shown.size}/${order.length}`;
+}
+function toggleCol(c) {
+  if (shown.has(c)) { if (shown.size === 1) return; shown.delete(c); } else shown.add(c); // keep at least one column
+  saveCols(); renderChips(); render();
+}
 let data = { rows: [] };
-const PAGE = 100; // rows shown per page; downloads always contain every row
+let view = []; // rows left after the filters; the table, the totals and the downloads all use this
+const PAGE = 100; // rows shown per page
 let page = 0;
 
+// ---------- Filters ----------
+// Search-level: keyword / MCAT, quick views (keep or drop a whole search).
+// Ad-level: advertiser, IndiaMART/competitors, ad type, position, rank, price (keep matching ads; searches without ads drop out).
+const F = { q: "", adv: new Set(), seller: "all", type: "all", pos: new Set(), rank: "any", price: new Set(), quick: "", dt: { preset: "", from: "", to: "", tf: "", tt: "" } };
+
+// ---------- Date & time (all India time) ----------
+const H = 3600e3, DAY = 24 * H;
+const istDate = (ms) => new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
+const tsOf = (r) => r._ts ?? (r._ts = Date.parse(`${r.search_date}T${r.search_time}+05:30`));
+const PRESET_LABEL = { "1h": "Last 1 hour", "24h": "Last 24 hours", today: "Today", yday: "Yesterday", "7d": "Last 7 days", "30d": "Last 30 days" };
+function presetRange(p) {
+  const now = Date.now(), today0 = Date.parse(istDate(now) + "T00:00:00+05:30");
+  return { "1h": [now - H, Infinity], "24h": [now - DAY, Infinity], today: [today0, Infinity], yday: [today0 - DAY, today0 - 1],
+           "7d": [now - 7 * DAY, Infinity], "30d": [now - 30 * DAY, Infinity] }[p];
+}
+function dtRange() {
+  if (F.dt.preset) return presetRange(F.dt.preset);
+  if (F.dt.from || F.dt.to) return [F.dt.from ? Date.parse(F.dt.from + ":00+05:30") : -Infinity, F.dt.to ? Date.parse(F.dt.to + ":59.999+05:30") : Infinity];
+  return null;
+}
+const dtActive = () => !!(F.dt.preset || F.dt.from || F.dt.to || F.dt.tf || F.dt.tt);
+function todMatch(r, dt = F.dt) {
+  const { tf, tt } = dt;
+  if (!tf && !tt) return true;
+  const t = String(r.search_time || "").slice(0, 5);
+  if (tf && tt) return tf <= tt ? t >= tf && t <= tt : t >= tf || t <= tt; // a window across midnight wraps
+  return tf ? t >= tf : t <= tt;
+}
+// ranges are inclusive at both ends: start <= time <= end
+const inRange = (x, rg) => x >= rg[0] && x <= rg[1];
+function dtMatch(r) {
+  const rg = dtRange();
+  if (rg && !inRange(tsOf(r), rg)) return false;
+  return todMatch(r);
+}
+const isIM = (d) => !!d && (d === "indiamart.com" || d.endsWith(".indiamart.com"));
+const posZone = (p) => (p <= 2 ? "top" : p <= 8 ? "mid" : "low");
+const priceBand = (p) => (p == null ? null : p < 1000 ? "a" : p < 10000 ? "b" : p < 100000 ? "c" : "d");
+let SEARCH = {}; // search_id -> { ads, im, comp, types }
+let ADV = [];    // advertisers for the picker: { d: domain, name, n: ads }
+
+function indexData() {
+  SEARCH = {};
+  const adv = new Map();
+  for (const r of data.rows) {
+    const s = SEARCH[r.search_id] || (SEARCH[r.search_id] = { ads: 0, im: false, comp: false, types: new Set() });
+    if (!r.ad_id) continue;
+    s.ads++; s.types.add(r.ads_type);
+    if (isIM(r.domain)) s.im = true; else s.comp = true;
+    if (!r.domain) continue;
+    const a = adv.get(r.domain) || { d: r.domain, n: 0, names: new Map() };
+    a.n++; a.names.set(r.advertiser_name, (a.names.get(r.advertiser_name) || 0) + 1);
+    adv.set(r.domain, a);
+  }
+  ADV = [...adv.values()]
+    .map((a) => ({ d: a.d, n: a.n, name: [...a.names.entries()].sort((x, y) => y[1] - x[1])[0][0] || a.d }))
+    .sort((x, y) => y.n - x.n);
+}
+const adFilterOn = () => F.adv.size || F.seller !== "all" || F.type !== "all" || F.pos.size || F.rank !== "any" || F.price.size;
+const anyFilterOn = () => !!(F.q.trim() || F.quick || adFilterOn() || dtActive() || Object.values(CF).some(cfActive));
+
+// Column filters, by column type:
+//  none     - no filter (long free text / ids)
+//  choice   - fixed options (device, run_mode, window_mode, status); run_mode allows one only
+//  presence - value present / empty (url_of_product)
+//  bands    - ready-made ranges + custom from/to (positions, price)
+//  list     - searchable checklist of the values in the data (everything else)
+const FUNNEL = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18l-7 8.6V19l-4 2v-8.4L3 4z"/></svg>`;
+const DT_COLS = new Set(["search_date", "search_time"]); // filtered only through the toolbar's Date & time panel
+const NO_FILTER = new Set(["search_id", "html_path", "ad_id", "title", "description", "image_url"]);
+const CHOICE = {
+  device:      { multi: true,  opts: [["mobile", "Mobile"], ["desktop", "Desktop"], ["tablet", "Tablet"]] },
+  run_mode:    { multi: false, opts: [["incognito", "Incognito"], ["normal", "Normal"]] },
+  window_mode: { multi: true,  opts: [["headless", "Headless"], ["headed", "Headed"]] },
+  status:      { multi: true,  opts: [["ok", "OK"], ["captcha", "CAPTCHA"], ["error", "Error"]] },
+};
+// [key, label, low, high] inclusive; null = "no value"
+const BANDS = {
+  absolute_ads_position: {
+    title: "Where on the page", from: "From section", to: "To section",
+    hint: "Section number counted from the top of the Google results page (1 = first section).",
+    opts: [["top", "Top of page (1–2)", 1, 2], ["upper", "Upper (3–5)", 3, 5], ["middle", "Middle (6–10)", 6, 10], ["lower", "Lower (11+)", 11, Infinity]],
+  },
+  relative_ads_position: {
+    title: "Rank inside its ad block", from: "From rank", to: "To rank",
+    hint: "Order of the ad inside its block: 1 = first ad / first product card.",
+    opts: [["1", "1st", 1, 1], ["2-3", "2nd – 3rd", 2, 3], ["4-5", "4th – 5th", 4, 5], ["6+", "6th or later", 6, Infinity]],
+  },
+  price: {
+    title: "Price", from: "Min ₹", to: "Max ₹",
+    hint: "Price shown on the ad, in ₹ (shopping ads).",
+    opts: [["lt1k", "Under ₹1,000", 0, 999], ["1k", "₹1,000 – 10,000", 1000, 9999], ["10k", "₹10,000 – 1 lakh", 10000, 99999],
+           ["1l", "₹1 – 10 lakh", 100000, 999999], ["10l", "Above ₹10 lakh", 1000000, Infinity], ["none", "No price shown", null, null]],
+  },
+};
+const cfKind = (c) => (NO_FILTER.has(c) || DT_COLS.has(c) ? "none" : CHOICE[c] ? "choice" : BANDS[c] ? "bands" : c === "url_of_product" ? "presence" : "list");
+const cfNew = (c) => {
+  const kind = cfKind(c);
+  return kind === "presence" ? { kind, mode: "" } : kind === "bands" ? { kind, sel: new Set(), min: "", max: "" } : { kind, vals: new Set() };
+};
+const EMPTY = "∅";
+const cfKey = (v) => (v === null || v === undefined || v === "" ? EMPTY : String(v));
+let CF = {};
+const cfActive = (f) => !!f && (f.kind === "presence" ? !!f.mode : f.kind === "bands" ? f.sel.size > 0 || f.min !== "" || f.max !== "" : f.vals.size > 0);
+function bandMatch(c, f, v, r) {
+  for (const k of f.sel) {
+    const o = BANDS[c].opts.find((x) => x[0] === k);
+    if (o[2] === null ? !!r.ad_id && v == null : v != null && v >= o[2] && v <= o[3]) return true; // "no value" = an ad without one
+  }
+  if ((f.min !== "" || f.max !== "") && v != null && (f.min === "" || v >= Number(f.min)) && (f.max === "" || v <= Number(f.max))) return true;
+  return false;
+}
+function cfMatch(r, skip) {
+  for (const c in CF) {
+    const f = CF[c];
+    if (c === skip || !cfActive(f)) continue;
+    const v = r[c];
+    if (f.kind === "list") { if (!f.vals.has(cfKey(v))) return false; }
+    else if (f.kind === "choice") { if (!f.vals.has(String(v ?? ""))) return false; }
+    else if (f.kind === "presence") { const has = v !== null && v !== undefined && v !== ""; if (f.mode === "present" ? !has : has) return false; }
+    else if (!bandMatch(c, f, v, r)) return false;
+  }
+  return true;
+}
+// One row against every filter; `skip` leaves out one column filter (used to list that column's available values)
+function rowPasses(r, skip) {
+  return basePasses(r) && cfMatch(r, skip) && (skip === "__dt" || dtMatch(r));
+}
+function basePasses(r) {
+  const q = F.q.trim().toLowerCase();
+  const adOn = adFilterOn();
+  {
+    if (q && !(String(r.search_keyword || "").toLowerCase().includes(q) || String(r.mcat_id ?? "").startsWith(q))) return false;
+    const s = SEARCH[r.search_id];
+    if (F.quick === "missing" && !(s.ads && !s.im)) return false;
+    if (F.quick === "alone" && !(s.im && !s.comp)) return false;
+    if (F.quick === "both" && !(s.types.has("search_ads") && s.types.has("shopping_ads"))) return false;
+    if (F.quick === "noads" && s.ads) return false;
+    if (!r.ad_id) return !adOn;
+    if (F.adv.size && !F.adv.has(r.domain)) return false;
+    if (F.seller === "im" && !isIM(r.domain)) return false;
+    if (F.seller === "comp" && isIM(r.domain)) return false;
+    if (F.type !== "all" && r.ads_type !== F.type) return false;
+    if (F.pos.size && !F.pos.has(posZone(r.absolute_ads_position))) return false;
+    if (F.rank !== "any" && r.relative_ads_position > Number(F.rank)) return false;
+    if (F.price.size && !F.price.has(priceBand(r.price))) return false;
+    return true;
+  }
+}
+function applyFilters() {
+  view = data.rows.filter((r) => rowPasses(r));
+  page = 0;
+  syncControls();
+  renderStats();
+  render();
+}
+
+function syncControls() {
+  $("#clearAll").hidden = !anyFilterOn();
+  $("#dtLabel").textContent = dtLabel();
+  $("#dtBtn").classList.toggle("act", dtActive());
+}
+
+function clearFilters() {
+  Object.assign(F, { q: "", adv: new Set(), seller: "all", type: "all", pos: new Set(), rank: "any", price: new Set(), quick: "", dt: { preset: "", from: "", to: "", tf: "", tt: "" } });
+  ["#dtFrom", "#dtTo", "#todFrom", "#todTo"].forEach((id) => ($(id).value = ""));
+  CF = {}; closeCF();
+  applyFilters();
+}
+
 function render() {
-  const total = data.rows.length;
+  const total = view.length;
   const pages = Math.max(1, Math.ceil(total / PAGE));
   page = Math.min(Math.max(page, 0), pages - 1);
   const start = page * PAGE;
-  const rows = data.rows.slice(start, start + PAGE);
+  const rows = view.slice(start, start + PAGE);
 
+  const cols = visibleCols();
+  const sep = cols.map(() => false); // all columns look the same; users don't need to know which table a column comes from
   const head = `<thead>
-    <tr class="grp"><th class="idx" rowspan="2">#</th><th class="gs" colspan="${S_COUNT}">Search_table</th><th class="ga sep" colspan="${COLS.length - S_COUNT}">Ads_results_table</th></tr>
-    <tr class="cols">${COLS.map((c, i) => `<th class="${c[3] === "num" ? "num" : ""}${i === S_COUNT ? " sep" : ""}">${c[1]}</th>`).join("")}</tr>
+    <tr class="cols"><th class="idx">#</th>${cols.map((c, i) => `<th class="${c[3] || ""}${cfActive(CF[c[1]]) ? " cf-on" : ""}"><span class="th-in"><span>${hdrLabel(c[1])}</span>${cfKind(c[1]) === "none" ? "" : `<button class="fbtn${cfOpen === c[1] ? " open" : ""}" type="button" data-col="${c[1]}" aria-label="Filter ${c[1]}" title="Filter ${c[1]}">${FUNNEL}</button>`}</span></th>`).join("")}</tr>
   </thead>`;
   const body = rows.length
-    ? rows.map((r, k) => { const i = start + k; return `<tr><td class="idx">${i + 1}</td>${COLS.map((c, ci) => `<td class="${[c[3] || "", ci === S_COUNT ? "sep" : ""].join(" ").trim()}">${c[2](r, i)}</td>`).join("")}</tr>`; }).join("")
-    : `<tr><td class="empty" colspan="${COLS.length + 1}">No searches stored yet.</td></tr>`;
+    ? rows.map((r, k) => { const i = start + k; return `<tr><td class="idx">${i + 1}</td>${cols.map((c, ci) => `<td class="${[c[3] || "", sep[ci] ? "sep" : ""].join(" ").trim()}">${c[2](r, i)}</td>`).join("")}</tr>`; }).join("")
+    : `<tr><td class="empty" colspan="${cols.length + 1}">${data.rows.length ? `No rows match these filters. <button class="link" type="button" data-clear>Clear all filters</button>` : "No searches stored yet."}</td></tr>`;
   $("#tbl").innerHTML = head + `<tbody>${body}</tbody>`;
   markOverflow();
   $("#tbl").closest(".tablewrap").scrollTop = 0;
-  $("#note").textContent = `${total.toLocaleString("en-IN")} rows`;
   $("#pinfo").textContent = total ? `Rows ${(start + 1).toLocaleString("en-IN")}–${(start + rows.length).toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")} · Page ${page + 1} of ${pages}` : "";
   $("#prev").disabled = page === 0;
   $("#next").disabled = page >= pages - 1;
 }
 
+// Totals for the filtered rows
 function renderStats() {
-  const ads = data.rows.filter((r) => r.ad_id);
+  const ads = view.filter((r) => r.ad_id);
   const n = (t) => ads.filter((r) => r.ads_type === t).length;
+  const pct = (x) => (ads.length ? Math.round((x / ads.length) * 100) + "%" : "–");
+  const fmt = (x) => Number(x).toLocaleString("en-IN");
   const items = [
-    ["Searches", data.searches], ["Ads", data.ads], ["Searches without ads", data.noAdSearches],
-    ["Search ads", n("search_ads")], ["Shopping ads", n("shopping_ads")],
-    ["Brand found", ads.length ? Math.round((ads.filter((r) => r.brand_status === "found").length / ads.length) * 100) + "%" : "–"],
+    ["Searches", fmt(new Set(view.map((r) => r.search_id)).size)],
+    ["Ads", fmt(ads.length)],
+    ["Search ads", fmt(n("search_ads"))],
+    ["Shopping ads", fmt(n("shopping_ads"))],
+    ["Advertisers", fmt(new Set(ads.map((r) => r.domain || r.advertiser_name)).size)],
+    ["IndiaMART share", pct(ads.filter((r) => isIM(r.domain)).length), "IndiaMART share of all ads"],
+    ["No-ad searches", fmt(new Set(view.filter((r) => !r.ad_id).map((r) => r.search_id)).size), "Searches where no ads were shown"],
+    ["Brand found", pct(ads.filter((r) => r.brand_status === "found").length)],
   ];
-  $("#stats").innerHTML = items.map(([k, val]) => `<div class="stat"><div class="v">${val ?? 0}</div><div class="k">${k}</div></div>`).join("");
+  $("#stats").innerHTML = items.map(([k, val, tip]) => `<div class="stat" title="${tip || k}: ${val ?? 0}"><div class="v">${val ?? 0}</div><div class="k">${k}</div></div>`).join("");
 }
 
 async function load() {
   try {
     const r = await fetch(`/api/dashboard?limit=1000`);
     data = await r.json();
-    renderStats();
-    render();
+    indexData();
+    applyFilters();
   } catch (e) {
     $("#tbl").innerHTML = `<tbody><tr><td class="empty">Could not load the dashboard data.</td></tr></tbody>`;
   }
 }
 
-const fileBase = () => `search_ads_combined_${data.searches}_searches`;
+// Downloads contain the filtered rows (all columns)
+const fileBase = () => `search_ads_${anyFilterOn() ? "filtered_" : ""}${new Set(view.map((r) => r.search_id)).size}_searches`;
 
 // Excel: one sheet with the combined table, plus one sheet per table, so it can be imported into Google Sheets as-is
 function downloadXlsx() {
@@ -228,8 +583,8 @@ function downloadXlsx() {
   const all = COLS.map((c) => c[1]);
   const sCols = COLS.filter((c) => c[0] === "s").map((c) => c[1]);
   const aCols = ["search_id", ...COLS.filter((c) => c[0] === "a").map((c) => c[1])];
-  const searches = [...new Map(data.rows.map((r) => [r.search_id, pick(r, sCols)])).values()];
-  const ads = data.rows.filter((r) => r.ad_id).map((r) => pick(r, aCols));
+  const searches = [...new Map(view.map((r) => [r.search_id, pick(r, sCols)])).values()];
+  const ads = view.filter((r) => r.ad_id).map((r) => pick(r, aCols));
   const wb = XLSX.utils.book_new();
   const add = (name, rows, cols) => {
     const ws = XLSX.utils.json_to_sheet(rows, { header: cols });
@@ -238,7 +593,7 @@ function downloadXlsx() {
     ws["!freeze"] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, ws, name);
   };
-  add("Combined", data.rows.map((r) => pick(r, all)), all);
+  add("Combined", view.map((r) => pick(r, all)), all);
   add("Search_table", searches, sCols);
   add("Ads_results_table", ads, aCols);
   XLSX.writeFile(wb, fileBase() + ".xlsx");
@@ -247,7 +602,7 @@ function downloadXlsx() {
 function downloadCsv() {
   const cols = COLS.map((c) => c[1]);
   const cell = (x) => (x === null || x === undefined ? "" : /[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : String(x));
-  const lines = [cols.join(","), ...data.rows.map((r) => cols.map((c) => cell(r[c])).join(","))];
+  const lines = [cols.join(","), ...view.map((r) => cols.map((c) => cell(r[c])).join(","))];
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   a.download = fileBase() + ".csv";
@@ -255,7 +610,211 @@ function downloadCsv() {
   URL.revokeObjectURL(a.href);
 }
 
-$("#csv").onclick = downloadCsv;
+$("#dlBtn").onclick = () => togglePop($("#dlPop"), $("#dlBtn"));
+$("#csv").onclick = () => { closePops(); downloadCsv(); };
+// ---------- Pop-ups (Date & time, Filters, Download): one open at a time; click outside or Esc closes ----------
+function closePops() { document.querySelectorAll(".pop").forEach((p) => (p.hidden = true)); document.querySelectorAll(".pop-wrap > .tbtn").forEach((b) => b.setAttribute("aria-expanded", "false")); }
+function togglePop(pop, btn) {
+  const open = pop.hidden;
+  document.querySelectorAll(".pop").forEach((p) => (p.hidden = true));
+  document.querySelectorAll(".pop-wrap > .tbtn").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  pop.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+  if (open) { // keep the panel inside the window: shift it left when it would run past the right edge
+    pop.style.transform = "";
+    const over = pop.getBoundingClientRect().right - (window.innerWidth - 12);
+    if (over > 0) pop.style.transform = `translateX(-${Math.ceil(over)}px)`;
+  }
+}
+// Columns row: open by default; folding it is remembered in this browser
+const COLROW_KEY = "gsa-dashboard-columns-open";
+function setColRow(open) {
+  $("#colrow").classList.toggle("closed", !open);
+  $("#coltoggle").setAttribute("aria-expanded", String(open));
+  try { localStorage.setItem(COLROW_KEY, open ? "1" : "0"); } catch (e) {}
+}
+try { if (localStorage.getItem(COLROW_KEY) === "0") setColRow(false); } catch (e) {}
+$("#coltoggle").onclick = () => setColRow($("#colrow").classList.contains("closed"));
+document.addEventListener("click", (e) => {
+  const path = e.composedPath(); // still valid when the clicked element was re-rendered
+  const inside = (sel) => path.some((n) => n instanceof Element && n.matches(sel));
+  if (!inside(".pop-wrap")) { document.querySelectorAll(".pop").forEach((p) => (p.hidden = true)); document.querySelectorAll(".pop-wrap > .tbtn").forEach((b) => b.setAttribute("aria-expanded", "false")); }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".pop").forEach((p) => (p.hidden = true)); });
+
+// ---------- Date & time panel ----------
+const fmtTs = (ms) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+// short label parts from a datetime-local value ("2026-11-10T13:00"): "10 Nov" and "13:00"
+const dayPart = (v) => new Date(Date.parse(v + ":00+05:30")).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" });
+const timePart = (v) => v.slice(11, 16);
+function dtLabel() {
+  const parts = [];
+  if (F.dt.preset) parts.push(PRESET_LABEL[F.dt.preset]);
+  else if (F.dt.from && F.dt.to && F.dt.from.slice(0, 10) === F.dt.to.slice(0, 10))
+    parts.push(`${dayPart(F.dt.from)} ${timePart(F.dt.from)}–${timePart(F.dt.to)}`); // same day: "10 Nov 13:00–14:00"
+  else if (F.dt.from || F.dt.to)
+    parts.push(`${F.dt.from ? `${dayPart(F.dt.from)} ${timePart(F.dt.from)}` : "…"} – ${F.dt.to ? `${dayPart(F.dt.to)} ${timePart(F.dt.to)}` : "…"}`);
+  if (F.dt.tf || F.dt.tt) parts.push(`${F.dt.tf || "00:00"}–${F.dt.tt || "23:59"}`);
+  return parts.join(" · ") || "Any time";
+}
+// The panel edits a draft (D); nothing is filtered until Apply / Update
+const EMPTY_DT = () => ({ preset: "", from: "", to: "", tf: "", tt: "" });
+let D = EMPTY_DT();
+const sameDt = (a, b) => ["preset", "from", "to", "tf", "tt"].every((k) => a[k] === b[k]);
+function loadDraft() {
+  D = { ...F.dt };
+  $("#dtFrom").value = D.from; $("#dtTo").value = D.to; $("#todFrom").value = D.tf; $("#todTo").value = D.tt;
+}
+function refreshDt() {
+  document.querySelectorAll("#dtPresets button").forEach((b) => {
+    b.classList.toggle("on", D.preset === b.dataset.v);
+  });
+  const badRange = D.from && D.to && D.from > D.to;
+  $("#dtApply").textContent = dtActive() ? "Update" : "Apply";
+  $("#dtApply").disabled = !!badRange; // always available; with no change it just closes the panel
+  $("#dtApply").title = badRange ? "“From” is after “To”" : "";
+}
+const closeDt = () => { if (!$("#dtPop").hidden) togglePop($("#dtPop"), $("#dtBtn")); };
+$("#dtBtn").onclick = () => { const opening = $("#dtPop").hidden; togglePop($("#dtPop"), $("#dtBtn")); if (opening) { loadDraft(); refreshDt(); } };
+$("#dtPresets").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  D.preset = D.preset === b.dataset.v ? "" : b.dataset.v;
+  D.from = D.to = ""; $("#dtFrom").value = $("#dtTo").value = ""; // a quick range replaces a custom range
+  refreshDt();
+});
+["#dtFrom", "#dtTo"].forEach((id) => $(id).addEventListener("input", () => {
+  D.from = $("#dtFrom").value; D.to = $("#dtTo").value; if (D.from || D.to) D.preset = ""; // a custom range replaces a quick range
+  refreshDt();
+}));
+["#todFrom", "#todTo"].forEach((id) => $(id).addEventListener("input", () => { D.tf = $("#todFrom").value; D.tt = $("#todTo").value; refreshDt(); }));
+$("#dtClear").onclick = () => { D = EMPTY_DT(); ["#dtFrom", "#dtTo", "#todFrom", "#todTo"].forEach((id) => ($(id).value = "")); refreshDt(); };
+$("#dtCancel").onclick = closeDt; // the draft is thrown away; reopening shows the applied filter
+$("#dtApply").onclick = () => {
+  if ($("#dtApply").disabled) return;
+  const changed = !sameDt(D, F.dt);
+  F.dt = { ...D }; closeDt();
+  if (changed) applyFilters();
+};
+$("#dtPop").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); $("#dtApply").click(); } });
+
+// ---------- Column filter pop-up ----------
+let cfOpen = null, cfVals = null, cfTimer;
+function closeCF() { cfOpen = null; cfVals = null; $("#cfpop").hidden = true; document.querySelectorAll(".fbtn.open").forEach((b) => b.classList.remove("open")); }
+function openCF(col, btn) {
+  if (cfOpen === col) { closeCF(); return; }
+  closeCF();
+  cfOpen = col;
+  btn.classList.add("open");
+  if (!CF[col]) CF[col] = cfNew(col);
+  const pop = $("#cfpop");
+  pop.hidden = false;
+  renderCFBody();
+  const r = btn.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + "px";
+  pop.style.top = r.bottom + 6 + "px";
+  const first = pop.querySelector("input[type=search], input[type=number]"); if (first && CF[col].kind === "list") first.focus();
+}
+function renderCFBody() {
+  const col = cfOpen, f = CF[col];
+  let html = `<div class="cfh"><b>${esc(col)}</b><button class="link" type="button" data-cf="clear">Clear</button></div>`;
+  if (f.kind === "choice") {
+    const def = CHOICE[col], type = def.multi ? "checkbox" : "radio";
+    const opts = def.multi ? def.opts : [["", "Any"], ...def.opts];
+    html += `<div class="cflist">${opts.map(([v, l]) => `<label class="cfi"><input type="${type}" name="cfch" data-ch="${esc(v)}"${(def.multi ? f.vals.has(v) : (f.vals.values().next().value ?? "") === v) ? " checked" : ""}><span>${esc(l)}</span></label>`).join("")}</div>`;
+    if (!def.multi) html += `<div class="hint">Pick one.</div>`;
+  } else if (f.kind === "presence") {
+    html += `<div class="cflist">${[["", "Any"], ["present", "URL present"], ["empty", "URL empty"]].map(([v, l]) => `<label class="cfi"><input type="radio" name="cfpr" data-pr="${v}"${f.mode === v ? " checked" : ""}><span>${l}</span></label>`).join("")}</div>`;
+  } else if (f.kind === "bands") {
+    const def = BANDS[col];
+    html += `<div class="pl">${esc(def.title)}</div><div class="opts" id="cfbands">${def.opts.map(([k, l]) => `<button type="button" data-band="${k}" class="${f.sel.has(k) ? "on" : ""}">${esc(l)}</button>`).join("")}</div>
+      <div class="pl">Custom</div><div class="cfrow"><label class="dtf">${esc(def.from)}<input type="number" id="cfmin" min="0" value="${esc(f.min)}"></label><label class="dtf">${esc(def.to)}<input type="number" id="cfmax" min="0" value="${esc(f.max)}"></label></div>
+      <div class="hint">${esc(def.hint)} Pick one or more ranges, or set your own.</div>`;
+  } else {
+    html += `<input type="search" id="cfs" placeholder="Search values…" autocomplete="off"><div class="cfacts"><button class="link" type="button" data-cf="all">Select all shown</button><span class="hint" id="cfcount"></span></div><div class="cflist" id="cflist"></div>`;
+  }
+  $("#cfpop").innerHTML = html;
+  $("#cfpop").classList.toggle("wide", f.kind === "bands");
+  if (f.kind === "list") buildCFList();
+}
+function buildCFList() {
+  const col = cfOpen, f = CF[col];
+  if (!cfVals) { // values available under all the other filters, with counts
+    cfVals = new Map();
+    for (const r of data.rows) if (rowPasses(r, col)) { const k = cfKey(r[col]); cfVals.set(k, (cfVals.get(k) || 0) + 1); }
+  }
+  const t = $("#cfs").value.trim().toLowerCase();
+  let items = [...cfVals.entries()];
+  for (const v of f.vals) if (!cfVals.has(v)) items.push([v, 0]); // keep ticked values visible
+  items = items.filter(([k]) => !t || k.toLowerCase().includes(t));
+  items.sort((a, b) =>
+    col === "mcat_id" ? Number(a[0]) - Number(b[0]) :
+    col === "search_date" ? b[0].localeCompare(a[0]) :
+    (f.vals.has(b[0]) - f.vals.has(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0]));
+  const shownItems = items.slice(0, 300);
+  $("#cflist").innerHTML = shownItems.length
+    ? shownItems.map(([k, n]) => `<label class="cfi"><input type="checkbox" data-v="${esc(k)}"${f.vals.has(k) ? " checked" : ""}><span title="${esc(k === EMPTY ? "(empty)" : k)}">${k === EMPTY ? "<i>(empty)</i>" : esc(k)}</span><small>${n.toLocaleString("en-IN")}</small></label>`).join("") +
+      (items.length > 300 ? `<div class="none">${items.length - 300} more — type to find them</div>` : "")
+    : `<div class="none">No values</div>`;
+  $("#cfcount").textContent = f.vals.size ? `${f.vals.size} selected` : "All values";
+}
+$("#tbl").addEventListener("click", (e) => { const b = e.target.closest(".fbtn"); if (b) { e.stopPropagation(); openCF(b.dataset.col, b); } });
+$("#cfpop").addEventListener("input", (e) => {
+  const f = CF[cfOpen]; if (!f) return;
+  if (e.target.id === "cfs") { buildCFList(); return; }
+  if (e.target.id === "cfmin" || e.target.id === "cfmax") { clearTimeout(cfTimer); cfTimer = setTimeout(() => { f.min = $("#cfmin").value; f.max = $("#cfmax").value; applyFilters(); }, 250); }
+});
+$("#cfpop").addEventListener("change", (e) => {
+  const f = CF[cfOpen]; if (!f) return;
+  const ds = e.target.dataset || {};
+  if (ds.ch !== undefined) { // fixed options
+    if (CHOICE[cfOpen].multi) e.target.checked ? f.vals.add(ds.ch) : f.vals.delete(ds.ch);
+    else f.vals = ds.ch ? new Set([ds.ch]) : new Set();
+    applyFilters(); return;
+  }
+  if (ds.pr !== undefined) { f.mode = ds.pr; applyFilters(); return; }
+  const v = ds.v; if (v === undefined) return;
+  e.target.checked ? f.vals.add(v) : f.vals.delete(v);
+  $("#cfcount").textContent = f.vals.size ? `${f.vals.size} selected` : "All values";
+  applyFilters();
+});
+$("#cfpop").addEventListener("click", (e) => {
+  const f = CF[cfOpen]; if (!f) return;
+  const band = e.target.closest("[data-band]");
+  if (band) { f.sel.has(band.dataset.band) ? f.sel.delete(band.dataset.band) : f.sel.add(band.dataset.band); band.classList.toggle("on"); applyFilters(); return; }
+  const a = e.target.closest("[data-cf]"); if (!a) return;
+  if (a.dataset.cf === "clear") { CF[cfOpen] = cfNew(cfOpen); renderCFBody(); }
+  else if (a.dataset.cf === "all") { $("#cflist").querySelectorAll("input[data-v]").forEach((x) => f.vals.add(x.dataset.v)); buildCFList(); }
+  applyFilters();
+});
+document.addEventListener("click", (e) => { if (cfOpen && !e.composedPath().some((n) => n instanceof Element && (n.id === "cfpop" || n.classList.contains("fbtn")))) closeCF(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && cfOpen) closeCF(); });
+$("#tbl").closest(".tablewrap").addEventListener("scroll", () => cfOpen && closeCF());
+window.addEventListener("resize", () => cfOpen && closeCF());
+
+// ---------- Filter controls ----------
+let qTimer;
+const segBind = (id, key) => $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { F[key] = b.dataset.v; applyFilters(); } });
+const multiBind = (id, key) => $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; F[key].has(b.dataset.v) ? F[key].delete(b.dataset.v) : F[key].add(b.dataset.v); applyFilters(); });
+$("#clearAll").onclick = clearFilters;
+$("#tbl").addEventListener("click", (e) => { if (e.target.closest("[data-clear]")) clearFilters(); });
+$("#colreset").onclick = () => { order = [...DEFAULT_ORDER]; shown = new Set(DEFAULT_SHOWN); saveCols(); renderChips(); render(); };
+$("#chips").addEventListener("click", (e) => { const ch = e.target.closest(".chip"); if (ch) toggleCol(ch.dataset.col); });
+$("#chips").addEventListener("keydown", (e) => { const ch = e.target.closest(".chip"); if (ch && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleCol(ch.dataset.col); } });
+// Drag a chip onto another to move it in front of that one
+let dragCol = null;
+$("#chips").addEventListener("dragstart", (e) => { const ch = e.target.closest(".chip"); if (!ch) return; dragCol = ch.dataset.col; ch.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+$("#chips").addEventListener("dragend", () => { dragCol = null; document.querySelectorAll(".chip").forEach((x) => x.classList.remove("dragging", "drop-before")); });
+$("#chips").addEventListener("dragover", (e) => {
+  const ch = e.target.closest(".chip"); if (!ch || !dragCol) return; e.preventDefault();
+  document.querySelectorAll(".chip.drop-before").forEach((x) => x.classList.remove("drop-before"));
+  if (ch.dataset.col !== dragCol) ch.classList.add("drop-before");
+});
+$("#chips").addEventListener("drop", (e) => {
+  const ch = e.target.closest(".chip"); if (!ch || !dragCol || ch.dataset.col === dragCol) return; e.preventDefault();
+  order.splice(order.indexOf(dragCol), 1);
+  order.splice(order.indexOf(ch.dataset.col), 0, dragCol);
+  saveCols(); renderChips(); render();
+});
+renderChips();
 $("#prev").onclick = () => { page--; render(); };
 $("#next").onclick = () => { page++; render(); };
 $("#tbl").addEventListener("click", (e) => { const b = e.target.closest(".more"); if (b) openFull(Number(b.dataset.row), b.dataset.col); });
@@ -263,7 +822,7 @@ $("#fclose").onclick = () => $("#full").close();
 $("#full").addEventListener("click", (e) => { if (e.target.id === "full") $("#full").close(); }); // click outside the box closes it
 window.addEventListener("resize", markOverflow);
 document.fonts && document.fonts.ready.then(markOverflow); // re-check once the Inter font has loaded
-$("#xlsx").onclick = downloadXlsx;
+$("#xlsx").onclick = () => { closePops(); downloadXlsx(); };
 load();
 </script>
 </body>

@@ -86,6 +86,8 @@ Setting env vars: macOS/Linux `CHROME_PATH="/path" npm run ui`; PowerShell `$env
 - Install next to other apps in its own folder, e.g. `~/public_html/google-search-automation`. Never inside another app's folder.
 - Check free ports first: `ss -ltnp | grep -E ':3000|:4000'`. If 3000 is taken (Next.js apps use it), pick e.g. `PATH_SERVER_PORT=3100` and use it for **both** servers.
 - No display on a server: runs are always headless. Only **Incognito** mode makes sense, because there's no logged-in browser profile on the server.
+- Install Node packages with `PUPPETEER_SKIP_DOWNLOAD=true npm install`: the UI uses the server's installed Chrome, so Puppeteer's own ~170 MB Chrome (only used by two demo scripts) isn't needed.
+- On the IndiaMART stage server, `test-im` uses the same system Chrome (Playwright `channel: "chrome"`); its Playwright Chromium in `~/.cache/ms-playwright/` can serve as a fallback via `CHROME_PATH`. Never download another browser there.
 - Browser: system Chrome (`google-chrome`) if installed; otherwise `npx puppeteer browsers install chrome` and set `CHROME_PATH` to the printed path. That Chrome needs system libraries (nss, atk, gtk3, …). If it fails to start, an admin must install them.
 - If the server's Node is older than 22.13, don't upgrade it (other apps depend on it). Unpack a private Node 22 into `<repo>/.node/` (git-ignored); `search-automation/ecosystem.config.js` uses it automatically.
 - Start / restart with pm2: `cd search-automation && pm2 start ecosystem.config.js` (defaults: path server 3100, UI 4100), then `pm2 save`. On a shared pm2, only touch `gsa-path-server` / `gsa-ui`. Never run `pm2 restart all`, `pm2 kill` or `pm2 update`.

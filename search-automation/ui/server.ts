@@ -514,6 +514,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html"))
       return send(res, 200, fs.readFileSync(path.join(PUBLIC, "index.html")), "text/html; charset=utf-8");
+    // Pictures saved from the pages (image_url = "images/<ad_id>.<ext>")
+    const im = p.match(/^\/images\/([a-z0-9-]+\.(?:webp|jpg|png|gif))$/);
+    if (req.method === "GET" && im) {
+      const file = path.join(CAPTURES, "images", im[1]);
+      if (!fs.existsSync(file)) return send(res, 404, "Not found", "text/plain");
+      const type = { webp: "image/webp", jpg: "image/jpeg", png: "image/png", gif: "image/gif" }[im[1].split(".").pop()!]!;
+      return send(res, 200, fs.readFileSync(file), type);
+    }
     if (req.method === "GET" && (p === "/dashboard" || p === "/dashboard.html"))
       return send(res, 200, fs.readFileSync(path.join(PUBLIC, "dashboard.html")), "text/html; charset=utf-8");
     // Combined Search_table + Ads_results_table for the first N searches (oldest first). ?rebuild=1 re-extracts them.
