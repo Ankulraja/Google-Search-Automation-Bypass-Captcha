@@ -6,7 +6,8 @@ import puppeteer, { Browser, Page } from "puppeteer";
 import Humanizer from "../index";
 import { BROWSERS, BROWSER_KINDS, BrowserKind, copyProfile, notFoundHint } from "../browsers";
 import { deleteRun, indexCapture, keywordReport, syncCaptures } from "./db";
-import { dashboardRows, ensureIndexed } from "./search-db";
+import { dashboardRows, ensureIndexed, indexSearch } from "./search-db";
+import { enqueue, flushQueue, removeKey, requireKey, saveKey, status as uploadStatus } from "./upload";
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
@@ -274,6 +275,12 @@ async function runJob(browser: Browser, job: Job) {
     // Extract the ads data from the source into SQLite. A failure here must not lose the capture.
     try { indexCapture(meta, html, `captures/${id}.html`); }
     catch (e: any) { console.error("[search-automation] ads extraction failed for", id, e?.message || e); }
+    // Upload to ads-next: extract into search_ads.sqlite, queue, send (a CAPTCHA retry re-sends the same id, which replaces it)
+    try {
+      indexSearch(meta, html, `${id}.html`, CAPTURES);
+      enqueue([id]);
+      flushQueue();
+    } catch (e: any) { console.error("[search-automation] could not queue", id, "for upload:", e?.message || e); }
 
     job.captureId = id;
     job.bytes = meta.bytes;
@@ -301,6 +308,14 @@ async function work() {
     while (!queuePaused && jobs.some((j) => j.status === "queued")) {
       // Lowest queue number first: the whole batch runs before any CAPTCHA retry
       const job = jobs.filter((j) => j.status === "queued").sort((a, b) => a.seq - b.seq)[0];
+      // No API key, no search: checked before every search (rest of a batch, CAPTCHA retries, resumed queue),
+      // so removing or revoking the key stops the queue. It waits until a key is added and the queue resumed.
+      const gate = await requireKey();
+      if (!gate.ok) {
+        queuePaused = true;
+        job.note = `Queue paused: ${gate.error}`;
+        break;
+      }
       job.status = "running";
       job.error = undefined;
       try {
@@ -574,6 +589,10 @@ const server = http.createServer(async (req, res) => {
     // Whole queue: pause (the running keyword finishes, the rest wait) / resume
     const qa = p.match(/^\/api\/queue\/(pause|resume)$/);
     if (req.method === "POST" && qa) {
+      if (qa[1] === "resume") {
+        const gate = await requireKey();
+        if (!gate.ok) return json(res, { error: gate.error, needKey: true }, 403);
+      }
       queuePaused = qa[1] === "pause";
       if (!queuePaused) work();
       return json(res, { ok: true, queuePaused });
@@ -611,7 +630,22 @@ const server = http.createServer(async (req, res) => {
       return json(res, { pathServer });
     }
 
+    // Upload key + upload queue (see upload.ts). The key itself is never sent to the browser.
+    if (req.method === "GET" && p === "/api/upload") return json(res, uploadStatus());
+    if (req.method === "POST" && p === "/api/upload/key") {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      const key = String(JSON.parse(body || "{}").key || "");
+      const r = await saveKey(key);
+      if (!r.ok) return json(res, { error: r.error }, r.reason === "invalid" ? 400 : 502);
+      return json(res, uploadStatus());
+    }
+    if (req.method === "DELETE" && p === "/api/upload/key") { removeKey(); return json(res, uploadStatus()); }
+
     if (req.method === "POST" && p === "/api/run") {
+      // No upload key, no run
+      const gate = await requireKey();
+      if (!gate.ok) return json(res, { error: gate.error, needKey: true }, 403);
       let body = "";
       for await (const chunk of req) body += chunk;
       const { queries, mode, browser, profile, device, headless, freshBrowser, replaceId } = JSON.parse(body || "{}");
@@ -629,7 +663,7 @@ const server = http.createServer(async (req, res) => {
       for (const q of parsed)
         jobs.push({ id: nextJobId++, mode: m, browser: kind, device: dev, headless: headless === true, freshBrowser: freshBrowser !== false, profile: prof?.dir, profileName: prof?.name, ...q, status: "queued", pass: 1, seq: nextSeq++, history: [], replaceId: typeof replaceId === "string" && validId(replaceId) ? replaceId : undefined });
       work();
-      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, headless: headless === true, profile: prof?.name });
+      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, headless: headless === true, profile: prof?.name, note: gate.offline });
     }
 
     if (req.method === "POST" && p === "/api/jobs/clear") {
@@ -686,6 +720,9 @@ try {
 } catch (e: any) {
   console.error("[search-automation] could not sync captures into SQLite:", e?.message || e);
 }
+
+// Send anything still waiting from an earlier session
+flushQueue();
 
 server.listen(PORT, HOST, () => {
   console.log(`Search Automation UI running on ${HOST}:${PORT}:`);

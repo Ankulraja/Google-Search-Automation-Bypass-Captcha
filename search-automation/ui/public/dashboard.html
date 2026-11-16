@@ -29,7 +29,8 @@
   header.top { flex: none; }
   main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px; }
   main > * { flex: none; }
-  main > .tablewrap { flex: 1 1 auto; min-height: 220px; }
+  main > .tablewrap { flex: 1 1 auto; min-height: 220px; border-bottom: 0; border-radius: 8px 8px 0 0; } /* runs to the window's bottom edge */
+  main { padding-bottom: 0 !important; }
 
   .head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
   .head h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
@@ -91,6 +92,14 @@
   .clip { display: inline-block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
   .pager { display: flex; gap: 4px; align-items: center; font-size: 13px; margin-right: 6px; }
+  .psize { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 13px; color: var(--text); white-space: nowrap; }
+  /* Rows-per-page selector: own chevron, spaced from the right edge, styled like the toolbar buttons */
+  .psize select { -webkit-appearance: none; appearance: none; height: 32px; min-width: 64px; padding: 0 30px 0 12px; border: 1px solid var(--border); border-radius: 6px;
+    background-color: var(--panel); color: var(--text); font: 500 13px var(--font); cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2366707c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; background-size: 14px 14px; transition: border-color .15s; }
+  .psize select:hover { border-color: var(--accent); }
+  .psize select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   .pager #pinfo { margin-right: 6px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pager button { width: 32px; height: 32px; padding: 0; font-size: 18px; line-height: 1; }
   [hidden] { display: none !important; }
@@ -137,6 +146,9 @@
   .dli b { font-size: 13px; } .dli small { font-size: 11.5px; color: var(--muted); }
   /* Date & time filter */
   #dtBtn svg { width: 15px; height: 15px; flex: none; }
+  #clearAll svg { width: 15px; height: 15px; flex: none; }
+  #clearAll:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  #clearAll:disabled { opacity: .55; }
   #dtLabel { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #dtPop { width: 430px; }
   .dtf { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--text); }
@@ -147,11 +159,18 @@
   .dtfoot { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
   .dtfoot .sp { flex: 1; }
   .dtfoot button:not(.link) { height: 32px; padding: 0 16px; font-size: 13px; }
+  /* Drag a header to move its column */
+  table.grid thead th[draggable="true"] { cursor: grab; user-select: none; }
+  table.grid thead th.dragging { opacity: .45; }
+  table.grid thead th.drop-l { box-shadow: inset 3px 0 0 var(--accent); }
+  table.grid thead th.drop-r { box-shadow: inset -3px 0 0 var(--accent); }
   /* Column header filters (Excel-style) */
-  .th-in { display: flex; align-items: center; gap: 2px; }
-  th.num .th-in { justify-content: flex-end; }
-  .fbtn { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: .4; cursor: pointer; }
-  .fbtn svg { width: 11px; height: 11px; }
+  /* Header: name on the left (right for number columns), filter button pinned to the right edge */
+  .th-in { display: flex; align-items: center; gap: 6px; }
+  .th-in > span { flex: 1; min-width: 0; }
+  th.num .th-in > span { text-align: right; }
+  .fbtn { flex: none; margin-left: auto; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: .55; cursor: pointer; }
+  .fbtn svg { width: 13px; height: 13px; }
   table.grid thead th:hover .fbtn, .fbtn:focus-visible, .fbtn.open { opacity: 1; }
   .fbtn:hover, .fbtn.open { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
   table.grid thead th.cf-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--head-bg)); }
@@ -197,9 +216,9 @@
 </head>
 <body>
 <header class="top">
-  <h1>Search Automation · Google search runner</h1>
-  <nav><a href="/">1. Run queries</a><a href="/source">2. Page source</a><a href="/dashboard" class="active">3. Dashboard</a></nav>
-  <button class="theme-btn" id="themeBtn" type="button">
+  <a class="brand" href="/" aria-label="Search Automation home"><img src="/favicon.svg" alt="" width="28" height="28"><span>Search Automation</span></a>
+  <nav aria-label="Main"><a href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Run queries</span></a><a href="/source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg><span>Page source</span></a><a href="/dashboard" class="active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Dashboard</span></a></nav>
+  <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch theme">
     <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
     <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
     <span class="tl">Dark</span>
@@ -214,7 +233,7 @@
       <button id="colreset" class="link" type="button">Reset</button>
       </div>
       <span class="sp"></span>
-      <div class="pager"><span id="pinfo"></span><button id="prev" type="button" title="Previous page" aria-label="Previous page">‹</button><button id="next" type="button" title="Next page" aria-label="Next page">›</button></div>
+      <div class="pager"><label class="psize" title="Rows per page"><select id="psize" aria-label="Rows per page"><option>25</option><option>50</option><option>100</option></select><span>per page</span></label><span id="pinfo"></span><button id="prev" type="button" title="Previous page" aria-label="Previous page">‹</button><button id="next" type="button" title="Next page" aria-label="Next page">›</button></div>
       <div class="pop-wrap">
         <button id="dtBtn" class="tbtn" type="button" aria-expanded="false" title="Filter by search date and time (India time)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
@@ -234,7 +253,9 @@
           <div class="dtfoot"><button class="link" type="button" id="dtClear">Clear</button><span class="sp"></span><button type="button" id="dtCancel">Cancel</button><button type="button" class="primary" id="dtApply">Apply</button></div>
         </div>
       </div>
-      <button id="clearAll" class="link" type="button" hidden title="Clear every filter">Clear all</button>
+      <button id="clearAll" class="tbtn" type="button" title="Remove every filter (column filters, date &amp; time) and put moved columns back in their default order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8.6V19l-4 2v-8.4z"/><path d="m16 15 5 5m0-5-5 5"/></svg>
+        <span id="clearLabel">Clear filters</span></button>
       <div class="pop-wrap dl-wrap">
         <button id="dlBtn" class="tbtn" type="button" aria-expanded="false" title="Download the rows shown (all columns)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg> Download ▾</button>
@@ -347,7 +368,10 @@ function toggleCol(c) {
 }
 let data = { rows: [] };
 let view = []; // rows left after the filters; the table, the totals and the downloads all use this
-const PAGE = 100; // rows shown per page
+// Rows per page: 25 / 50 / 100, default 50, remembered in this browser
+const PAGE_SIZES = [25, 50, 100], PAGE_KEY = "gsa-dashboard-page-size";
+let PAGE = 50;
+try { const n = Number(localStorage.getItem(PAGE_KEY)); if (PAGE_SIZES.includes(n)) PAGE = n; } catch (e) {}
 let page = 0;
 
 // ---------- Filters ----------
@@ -502,21 +526,56 @@ function basePasses(r) {
 function applyFilters() {
   view = data.rows.filter((r) => rowPasses(r));
   page = 0;
+  saveFilters();
   syncControls();
   renderStats();
   render();
 }
 
+const orderChanged = () => order.join() !== DEFAULT_ORDER.join(); // columns dragged out of the default order
+const activeFilterCount = () => Object.values(CF).filter(cfActive).length + (dtActive() ? 1 : 0) + (F.q.trim() ? 1 : 0) + (adFilterOn() ? 1 : 0) + (orderChanged() ? 1 : 0);
 function syncControls() {
-  $("#clearAll").hidden = !anyFilterOn();
+  const n = activeFilterCount();
+  $("#clearAll").disabled = n === 0;
+  $("#clearLabel").textContent = n ? `Clear filters (${n})` : "Clear filters";
   $("#dtLabel").textContent = dtLabel();
   $("#dtBtn").classList.toggle("act", dtActive());
+}
+
+// ---------- Remember filters in this browser (survives refresh) ----------
+const FILTERS_KEY = "gsa-dashboard-filters-v1";
+function saveFilters() {
+  const cf = {};
+  for (const [c, f] of Object.entries(CF)) {
+    if (!cfActive(f)) continue;
+    cf[c] = f.kind === "presence" ? { kind: f.kind, mode: f.mode }
+          : f.kind === "bands" ? { kind: f.kind, sel: [...f.sel], min: f.min, max: f.max }
+          : { kind: f.kind, vals: [...f.vals] };
+  }
+  try { localStorage.setItem(FILTERS_KEY, JSON.stringify({ dt: F.dt, cf })); } catch (e) {}
+}
+function restoreFilters() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || "null"); } catch (e) {}
+  if (!saved || typeof saved !== "object") return;
+  if (saved.dt && typeof saved.dt === "object") F.dt = { ...EMPTY_DT(), ...saved.dt };
+  CF = {};
+  for (const [c, f] of Object.entries(saved.cf || {})) {
+    if (!f || cfKind(c) !== f.kind) continue; // ignore columns whose filter type has changed
+    const x = cfNew(c);
+    if (x.kind === "presence") x.mode = String(f.mode || "");
+    else if (x.kind === "bands") { x.sel = new Set(Array.isArray(f.sel) ? f.sel : []); x.min = f.min ?? ""; x.max = f.max ?? ""; }
+    else x.vals = new Set(Array.isArray(f.vals) ? f.vals.map(String) : []);
+    if (x.kind === "choice" && !CHOICE[c].multi && x.vals.size > 1) x.vals = new Set([[...x.vals][0]]);
+    CF[c] = x;
+  }
 }
 
 function clearFilters() {
   Object.assign(F, { q: "", adv: new Set(), seller: "all", type: "all", pos: new Set(), rank: "any", price: new Set(), quick: "", dt: { preset: "", from: "", to: "", tf: "", tt: "" } });
   ["#dtFrom", "#dtTo", "#todFrom", "#todTo"].forEach((id) => ($(id).value = ""));
   CF = {}; closeCF();
+  order = [...DEFAULT_ORDER]; saveCols(); renderChips();
   applyFilters();
 }
 
@@ -530,7 +589,7 @@ function render() {
   const cols = visibleCols();
   const sep = cols.map(() => false); // all columns look the same; users don't need to know which table a column comes from
   const head = `<thead>
-    <tr class="cols"><th class="idx">#</th>${cols.map((c, i) => `<th class="${c[3] || ""}${cfActive(CF[c[1]]) ? " cf-on" : ""}"><span class="th-in"><span>${hdrLabel(c[1])}</span>${cfKind(c[1]) === "none" ? "" : `<button class="fbtn${cfOpen === c[1] ? " open" : ""}" type="button" data-col="${c[1]}" aria-label="Filter ${c[1]}" title="Filter ${c[1]}">${FUNNEL}</button>`}</span></th>`).join("")}</tr>
+    <tr class="cols"><th class="idx">#</th>${cols.map((c, i) => `<th class="${c[3] || ""}${cfActive(CF[c[1]]) ? " cf-on" : ""}" draggable="true" data-col="${c[1]}" title="Drag to move this column"><span class="th-in"><span>${hdrLabel(c[1])}</span>${cfKind(c[1]) === "none" ? "" : `<button class="fbtn${cfOpen === c[1] ? " open" : ""}" type="button" data-col="${c[1]}" aria-label="Filter ${c[1]}" title="Filter ${c[1]}">${FUNNEL}</button>`}</span></th>`).join("")}</tr>
   </thead>`;
   const body = rows.length
     ? rows.map((r, k) => { const i = start + k; return `<tr><td class="idx">${i + 1}</td>${cols.map((c, ci) => `<td class="${[c[3] || "", sep[ci] ? "sep" : ""].join(" ").trim()}">${c[2](r, i)}</td>`).join("")}</tr>`; }).join("")
@@ -567,6 +626,7 @@ async function load() {
     const r = await fetch(`/api/dashboard?limit=1000`);
     data = await r.json();
     indexData();
+    restoreFilters(); // filters from the last visit
     applyFilters();
   } catch (e) {
     $("#tbl").innerHTML = `<tbody><tr><td class="empty">Could not load the dashboard data.</td></tr></tbody>`;
@@ -796,7 +856,7 @@ const segBind = (id, key) => $(id).addEventListener("click", (e) => { const b = 
 const multiBind = (id, key) => $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; F[key].has(b.dataset.v) ? F[key].delete(b.dataset.v) : F[key].add(b.dataset.v); applyFilters(); });
 $("#clearAll").onclick = clearFilters;
 $("#tbl").addEventListener("click", (e) => { if (e.target.closest("[data-clear]")) clearFilters(); });
-$("#colreset").onclick = () => { order = [...DEFAULT_ORDER]; shown = new Set(DEFAULT_SHOWN); saveCols(); renderChips(); render(); };
+$("#colreset").onclick = () => { order = [...DEFAULT_ORDER]; shown = new Set(DEFAULT_SHOWN); saveCols(); renderChips(); render(); syncControls(); };
 $("#chips").addEventListener("click", (e) => { const ch = e.target.closest(".chip"); if (ch) toggleCol(ch.dataset.col); });
 $("#chips").addEventListener("keydown", (e) => { const ch = e.target.closest(".chip"); if (ch && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleCol(ch.dataset.col); } });
 // Drag a chip onto another to move it in front of that one
@@ -812,9 +872,43 @@ $("#chips").addEventListener("drop", (e) => {
   const ch = e.target.closest(".chip"); if (!ch || !dragCol || ch.dataset.col === dragCol) return; e.preventDefault();
   order.splice(order.indexOf(dragCol), 1);
   order.splice(order.indexOf(ch.dataset.col), 0, dragCol);
-  saveCols(); renderChips(); render();
+  saveCols(); renderChips(); render(); syncControls();
 });
+// ---------- Drag a table header onto another to move the column ----------
+let hdrDrag = null;
+const clearDropMarks = () => document.querySelectorAll("thead th.drop-l, thead th.drop-r, thead th.dragging").forEach((t) => t.classList.remove("drop-l", "drop-r", "dragging"));
+const dropSide = (th, e) => { const r = th.getBoundingClientRect(); return e.clientX < r.left + r.width / 2 ? "l" : "r"; };
+$("#tbl").addEventListener("dragstart", (e) => {
+  const th = e.target.closest && e.target.closest("thead th[data-col]"); if (!th) return;
+  hdrDrag = th.dataset.col; closeCF(); th.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", hdrDrag);
+});
+$("#tbl").addEventListener("dragover", (e) => {
+  const th = e.target.closest && e.target.closest("thead th[data-col]"); if (!th || !hdrDrag) return;
+  e.preventDefault();
+  document.querySelectorAll("thead th.drop-l, thead th.drop-r").forEach((t) => t.classList.remove("drop-l", "drop-r"));
+  if (th.dataset.col !== hdrDrag) th.classList.add("drop-" + dropSide(th, e));
+});
+$("#tbl").addEventListener("drop", (e) => {
+  const th = e.target.closest && e.target.closest("thead th[data-col]"); if (!th || !hdrDrag) return;
+  e.preventDefault();
+  const target = th.dataset.col, side = dropSide(th, e);
+  if (target !== hdrDrag) {
+    order.splice(order.indexOf(hdrDrag), 1);
+    order.splice(order.indexOf(target) + (side === "r" ? 1 : 0), 0, hdrDrag); // hidden columns keep their place in the full order
+    saveCols(); renderChips(); render(); syncControls();
+  }
+  hdrDrag = null; clearDropMarks();
+});
+$("#tbl").addEventListener("dragend", () => { hdrDrag = null; clearDropMarks(); });
+
 renderChips();
+$("#psize").value = String(PAGE);
+$("#psize").onchange = () => {
+  PAGE = Number($("#psize").value); page = 0;
+  try { localStorage.setItem(PAGE_KEY, String(PAGE)); } catch (e) {}
+  render();
+};
 $("#prev").onclick = () => { page--; render(); };
 $("#next").onclick = () => { page++; render(); };
 $("#tbl").addEventListener("click", (e) => { const b = e.target.closest(".more"); if (b) openFull(Number(b.dataset.row), b.dataset.col); });

@@ -169,3 +169,57 @@ export function dashboardRows(ids: string[]) {
     .get(...ids, ...ids) as { searches: number; ads: number; noAdSearches: number };
   return { rows, ...c };
 }
+
+/** Stored rows for uploading to ads-next (upload.ts): each search with its ads, in the given order. */
+export interface StoredSearch {
+  search_id: string;
+  mcat_id: number | null;
+  search_keyword: string;
+  search_time: string;
+  search_date: string;
+  location: string | null;
+  ip_address: string | null;
+  device: string;
+  run_mode: string;
+  window_mode: string;
+  status: string;
+  ads: {
+    ads_type: string;
+    title: string | null;
+    description: string | null;
+    advertiser_name: string | null;
+    domain: string | null;
+    brand: string | null;
+    brand_status: string;
+    price: number | null;
+    image_url: string | null;
+    url_of_product: string | null;
+    absolute_ads_position: number;
+    relative_ads_position: number;
+  }[];
+}
+
+export function storedSearches(ids: string[]): StoredSearch[] {
+  const one = db.prepare(
+    `SELECT search_id, mcat_id, search_keyword, search_time, search_date, location, ip_address, device, run_mode,
+            window_mode, status FROM Search_table WHERE search_id = ?`
+  );
+  const ads = db.prepare(
+    `SELECT ads_type, title, description, advertiser_name, domain, brand, brand_status, price, image_url, url_of_product,
+            absolute_ads_position, relative_ads_position
+       FROM Ads_results_table WHERE search_id = ? ORDER BY absolute_ads_position, relative_ads_position`
+  );
+  const out: StoredSearch[] = [];
+  for (const id of ids) {
+    const s = one.get(id) as Omit<StoredSearch, "ads"> | undefined;
+    if (s) out.push({ ...s, ads: ads.all(id) as StoredSearch["ads"] });
+  }
+  return out;
+}
+
+/** Every stored search id, oldest first. */
+export function allSearchIds(): string[] {
+  return (db.prepare("SELECT search_id FROM Search_table ORDER BY search_date, search_time").all() as { search_id: string }[]).map(
+    (r) => r.search_id
+  );
+}

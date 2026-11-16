@@ -78,6 +78,7 @@ Quick smoke test without Google: `npm test local-demo.ts` (opens a local page an
 | `UI_HOST` | Address the UI listens on: `127.0.0.1` (default, this machine only) or `0.0.0.0` (whole network: the UI has no login, avoid on shared servers) |
 | `PATH_SERVER_PORT` | Path server port (default 3000). Set the **same value** for `npm run path-server` and `npm run ui` |
 | `PATH_SERVER_HOST` | Address the path server listens on (default `127.0.0.1`) |
+| `GSA_UPLOAD_URL` | ads-next that runs are uploaded to (default `https://ads.intermesh.net`). Runs need an upload key: ads-next → Search Automation Results → API keys, pasted on Run queries |
 
 Setting env vars: macOS/Linux `CHROME_PATH="/path" npm run ui`; PowerShell `$env:CHROME_PATH="C:\...\chrome.exe"; npm run ui`; cmd `set CHROME_PATH=C:\...\chrome.exe && npm run ui`.
 
