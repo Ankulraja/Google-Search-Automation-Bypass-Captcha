@@ -1,4 +1,5 @@
 import http from "http";
+import net from "net";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -8,6 +9,17 @@ import { BROWSERS, BROWSER_KINDS, BrowserKind, copyProfile, notFoundHint } from 
 import { deleteRun, indexCapture, keywordReport, syncCaptures } from "./db";
 import { dashboardRows, ensureIndexed, indexSearch } from "./search-db";
 import { enqueue, flushQueue, removeKey, requireKey, saveKey, status as uploadStatus } from "./upload";
+
+// Puppeteer can throw unhandled rejections (e.g. TargetCloseError when a browser/tab closes
+// unexpectedly due to a dead proxy or crash). Without this handler, Node kills the entire process.
+process.on("unhandledRejection", (err: any) => {
+  const msg = String(err?.message || err);
+  if (/Target closed|Protocol error|Session closed/i.test(msg)) {
+    console.warn("[search-automation] Puppeteer connection lost (caught):", msg);
+    return;
+  }
+  console.error("[search-automation] unhandled rejection:", err);
+});
 
 // Local UI: page 1 (/) queues search queries, page 2 (/source) shows the saved page source.
 const PORT = Number(process.env.UI_PORT || 4000);
@@ -21,6 +33,36 @@ const CAPTURES = path.join(__dirname, "captures");
 fs.mkdirSync(CAPTURES, { recursive: true });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ---------- Proxy pool ----------
+let proxyPool: string[] = [];
+let proxyIdx = 0;
+
+function checkProxy(proxy: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const url = proxy.includes("://") ? proxy : `http://${proxy}`;
+      const { hostname, port } = new URL(url);
+      const socket = net.createConnection(Number(port) || 80, hostname);
+      socket.setTimeout(timeoutMs);
+      socket.on("connect", () => { socket.destroy(); resolve(true); });
+      socket.on("error", () => resolve(false));
+      socket.on("timeout", () => { socket.destroy(); resolve(false); });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+function pickNextProxy(skip?: string): string | undefined {
+  if (!proxyPool.length) return undefined;
+  for (let i = 0; i < proxyPool.length; i++) {
+    const p = proxyPool[proxyIdx % proxyPool.length];
+    proxyIdx++;
+    if (p !== skip) return p;
+  }
+  return undefined;
+}
 
 type Status = "queued" | "paused" | "running" | "done" | "captcha" | "error" | "cancelled";
 type Mode = "logged-in" | "incognito";
@@ -40,6 +82,7 @@ interface Job {
   history: { pass: number; status: Status; captureId?: string }[]; // result of every pass
   replaceId?: string; // "Run again": overwrite this existing capture instead of adding a new one
   tag?: string; // optional leading number, e.g. an MCAT id
+  proxy?: string; // proxy address for this job, e.g. "http://host:port" or "host:port"
   query: string;
   status: Status;
   captureId?: string;
@@ -155,28 +198,32 @@ function checkInstalled(kind: BrowserKind): string {
 }
 
 // Logged-in: a copy of your real browser profile (cookies, Google sign-in, extensions)
-function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean) {
+function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean, proxy?: string) {
   const exe = checkInstalled(kind);
+  const args = [`--profile-directory=${profile}`, ...COMMON_ARGS];
+  if (proxy) args.push(`--proxy-server=${proxy}`);
   return puppeteer.launch({
     executablePath: exe,
     headless: effectiveHeadless(headless),
     defaultViewport: null,
     userDataDir: BROWSERS[kind].copy,
     ignoreDefaultArgs: COMMON_IGNORE,
-    args: [`--profile-directory=${profile}`, ...COMMON_ARGS],
+    args,
   });
 }
 
 // Incognito: a brand-new empty profile that is deleted afterwards; each query uses its own private context
-function launchIncognito(kind: BrowserKind, tmpDir: string, headless: boolean) {
+function launchIncognito(kind: BrowserKind, tmpDir: string, headless: boolean, proxy?: string) {
   const exe = checkInstalled(kind);
+  const args = [...COMMON_ARGS];
+  if (proxy) args.push(`--proxy-server=${proxy}`);
   return puppeteer.launch({
     executablePath: exe,
     headless: effectiveHeadless(headless),
     defaultViewport: null,
     userDataDir: tmpDir,
     ignoreDefaultArgs: COMMON_IGNORE,
-    args: COMMON_ARGS,
+    args,
   });
 }
 
@@ -308,27 +355,39 @@ async function work() {
     while (!queuePaused && jobs.some((j) => j.status === "queued")) {
       // Lowest queue number first: the whole batch runs before any CAPTCHA retry
       const job = jobs.filter((j) => j.status === "queued").sort((a, b) => a.seq - b.seq)[0];
-      // No API key, no search: checked before every search (rest of a batch, CAPTCHA retries, resumed queue),
-      // so removing or revoking the key stops the queue. It waits until a key is added and the queue resumed.
-      const gate = await requireKey();
-      if (!gate.ok) {
-        queuePaused = true;
-        job.note = `Queue paused: ${gate.error}`;
-        break;
-      }
       job.status = "running";
       job.error = undefined;
       try {
+        // Check proxy health before use; cycle through the pool until one responds
+        if (job.proxy) {
+          let alive = await checkProxy(job.proxy);
+          if (!alive && proxyPool.length > 1) {
+            const original = job.proxy;
+            for (let tries = 0; tries < proxyPool.length; tries++) {
+              const next = pickNextProxy(original);
+              if (!next) break;
+              console.log(`[search-automation] Proxy ${job.proxy} is dead, trying ${next}…`);
+              job.proxy = next;
+              alive = await checkProxy(next);
+              if (alive) break;
+            }
+          }
+          if (!alive) {
+            console.warn(`[search-automation] All proxies dead — falling back to real IP for "${job.query}"`);
+            job.proxy = undefined;
+            job.note = "All proxies dead — running with your real IP";
+          }
+        }
         // Relaunch when the next job needs a different browser / mode / profile
-        const key = `${job.browser}|${job.mode}|${job.headless ? "headless" : "headed"}|${job.mode === "logged-in" ? job.profile : ""}`;
+        const key = `${job.browser}|${job.mode}|${job.headless ? "headless" : "headed"}|${job.mode === "logged-in" ? job.profile : ""}|${job.proxy || ""}`;
         if (browser && (browserKey !== key || !browser.connected)) await closeBrowser();
         if (!browser) {
           if (job.mode === "incognito") {
             tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gsa-incognito-"));
-            browser = await launchIncognito(job.browser, tmpDir, job.headless);
+            browser = await launchIncognito(job.browser, tmpDir, job.headless, job.proxy);
           } else {
             syncProfile(job.browser, job.profile!);
-            browser = await launchLoggedIn(job.browser, job.profile!, job.headless);
+            browser = await launchLoggedIn(job.browser, job.profile!, job.headless, job.proxy);
           }
           browserKey = key;
         }
@@ -341,7 +400,12 @@ async function work() {
         const result = job.status as Status; // set inside runJob
         if (result === "captcha") {
           if (job.pass < MAX_PASSES) {
-            job.note = `CAPTCHA on pass ${job.pass}. Retrying in pass ${job.pass + 1} after the rest of the batch.`;
+            const oldProxy = job.proxy;
+            if (oldProxy && proxyPool.length > 1) {
+              const next = pickNextProxy(oldProxy);
+              if (next) job.proxy = next;
+            }
+            job.note = `CAPTCHA on pass ${job.pass}${oldProxy ? ` (proxy ${oldProxy})` : ""}. Retrying pass ${job.pass + 1}${job.proxy !== oldProxy ? ` with proxy ${job.proxy}` : ""}.`;
             job.pass++;
             job.seq = nextSeq++;
             job.status = "queued";
@@ -589,10 +653,6 @@ const server = http.createServer(async (req, res) => {
     // Whole queue: pause (the running keyword finishes, the rest wait) / resume
     const qa = p.match(/^\/api\/queue\/(pause|resume)$/);
     if (req.method === "POST" && qa) {
-      if (qa[1] === "resume") {
-        const gate = await requireKey();
-        if (!gate.ok) return json(res, { error: gate.error, needKey: true }, 403);
-      }
       queuePaused = qa[1] === "pause";
       if (!queuePaused) work();
       return json(res, { ok: true, queuePaused });
@@ -643,12 +703,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "DELETE" && p === "/api/upload/key") { removeKey(); return json(res, uploadStatus()); }
 
     if (req.method === "POST" && p === "/api/run") {
-      // No upload key, no run
-      const gate = await requireKey();
-      if (!gate.ok) return json(res, { error: gate.error, needKey: true }, 403);
       let body = "";
       for await (const chunk of req) body += chunk;
-      const { queries, mode, browser, profile, device, headless, freshBrowser, replaceId } = JSON.parse(body || "{}");
+      const { queries, mode, browser, profile, device, headless, freshBrowser, replaceId, proxies: rawProxies } = JSON.parse(body || "{}");
       const dev: Device = device === "mobile" ? "mobile" : "desktop";
       const parsed = parseQueries(String(queries || ""));
       if (!parsed.length) return json(res, { error: "Enter at least one query" }, 400);
@@ -660,10 +717,17 @@ const server = http.createServer(async (req, res) => {
         const { profiles, lastUsed } = listProfiles(kind);
         prof = profiles.find((x) => x.dir === profile) || profiles.find((x) => x.dir === lastUsed) || profiles[0];
       }
-      for (const q of parsed)
-        jobs.push({ id: nextJobId++, mode: m, browser: kind, device: dev, headless: headless === true, freshBrowser: freshBrowser !== false, profile: prof?.dir, profileName: prof?.name, ...q, status: "queued", pass: 1, seq: nextSeq++, history: [], replaceId: typeof replaceId === "string" && validId(replaceId) ? replaceId : undefined });
+      // Parse proxy list, store in pool for rotation, and assign round-robin across queries
+      const proxyList = String(rawProxies || "").split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      if (proxyList.length) { proxyPool = proxyList; proxyIdx = 0; }
+      const gate = await requireKey();
+      for (let i = 0; i < parsed.length; i++) {
+        const proxy = proxyList.length ? proxyList[i % proxyList.length] : undefined;
+        jobs.push({ id: nextJobId++, mode: m, browser: kind, device: dev, headless: headless === true, freshBrowser: freshBrowser !== false, profile: prof?.dir, profileName: prof?.name, proxy, ...parsed[i], status: "queued", pass: 1, seq: nextSeq++, history: [], replaceId: typeof replaceId === "string" && validId(replaceId) ? replaceId : undefined });
+      }
       work();
-      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, headless: headless === true, profile: prof?.name, note: gate.offline });
+      const noKey = !gate.ok;
+      return json(res, { added: parsed.length, mode: m, browser: kind, device: dev, headless: headless === true, profile: prof?.name, proxies: proxyList.length, noKey, note: noKey ? "No API key — searches will run but results won't upload to the shared database." : gate.offline });
     }
 
     if (req.method === "POST" && p === "/api/jobs/clear") {

@@ -68,6 +68,20 @@
   .keynote { font-size: 12px; margin: -8px 0 14px; }
   .keynote:empty { display: none; }
   .keynote.err { color: var(--err); }
+  .proxy-box { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--code-bg); overflow: hidden; }
+  .proxy-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; }
+  .proxy-header:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .proxy-header .ph-left { display: flex; align-items: center; gap: 8px; }
+  .proxy-header .ph-left svg { width: 16px; height: 16px; color: var(--muted); flex-shrink: 0; }
+  .proxy-header .ph-title { font-size: 13px; font-weight: 600; }
+  .proxy-header .ph-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .proxy-header .ph-opt { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .proxy-header .ph-arrow { font-size: 11px; color: var(--muted); transition: transform .2s; }
+  .proxy-box.open .ph-arrow { transform: rotate(90deg); }
+  .proxy-body { display: none; padding: 0 12px 12px; }
+  .proxy-box.open .proxy-body { display: block; }
+  .proxy-body textarea { min-height: 80px; resize: vertical; font-size: 13px; }
+  .proxy-body .hint { margin: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -84,7 +98,7 @@
   <section class="panel">
     <div id="health" class="muted" style="font-size:12px;margin-bottom:10px">Checking path server…</div>
     <div class="keytab" id="keytab">
-      <span class="kl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M16 7l3 3M18 5l2 2"/></svg>API key</span>
+      <span class="kl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M16 7l3 3M18 5l2 2"/></svg>API key <span style="font-weight:400;font-size:11px;color:var(--muted)">(optional — for uploading results)</span></span>
       <span id="keyNone" style="display:contents">
         <input type="password" id="keyInput" placeholder="Paste key" autocomplete="off" spellcheck="false" aria-label="API key">
         <button class="mini primary" id="keySave" type="button">Save</button>
@@ -102,6 +116,23 @@
     <h2>Search queries</h2>
     <textarea id="q" placeholder="One query per line, e.g.&#10;9898    Massage Chair&#10;191481  Interactive Flat Panel&#10;Polyester Fabric"></textarea>
     <p class="hint muted">One query per line. A leading number (e.g. an MCAT id) is kept as a tag and not searched.</p>
+    <div class="proxy-box" id="proxyBox">
+      <div class="proxy-header" id="proxyToggle">
+        <span class="ph-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span class="ph-title">Proxies</span>
+          <span class="ph-opt">optional</span>
+        </span>
+        <span class="ph-right" style="display:flex;align-items:center;gap:8px">
+          <span class="ph-badge" id="proxyCount" style="display:none">0</span>
+          <span class="ph-arrow">▶</span>
+        </span>
+      </div>
+      <div class="proxy-body">
+        <textarea id="proxies" placeholder="One proxy per line, e.g.&#10;http://123.45.67.89:8080&#10;http://user:pass@proxy.example.com:3128&#10;socks5://98.76.54.32:1080" rows="4"></textarea>
+        <p class="hint muted">Rotates automatically — query 1 → proxy 1, query 2 → proxy 2, and so on. Leave empty to use your own IP.</p>
+      </div>
+    </div>
     <div class="controls">
       <div class="field">
         <span class="cap">Browser</span>
@@ -137,7 +168,7 @@
         <select id="profile" class="ctl"></select>
       </div>
     </div>
-    <button class="primary" id="run" disabled title="Add your API key first">Run search</button>
+    <button class="primary" id="run">Run search</button>
     <span id="msg" class="muted"></span>
   </section>
 
@@ -164,20 +195,19 @@ $("#run").onclick = async () => {
   if (!queries.trim()) { $("#msg").textContent = "Enter at least one query."; return; }
   $("#run").disabled = true;
   try {
-    const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queries, mode: currentMode(), browser: currentBrowser(), device: currentDevice(), headless: currentWindow() === "headless", freshBrowser: true, profile: currentMode() === "logged-in" ? $("#profile").value : undefined }) });
+    const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queries, mode: currentMode(), browser: currentBrowser(), device: currentDevice(), headless: currentWindow() === "headless", freshBrowser: true, profile: currentMode() === "logged-in" ? $("#profile").value : undefined, proxies: $("#proxies").value }) });
     const d = await r.json();
-    $("#msg").textContent = d.error || `Queued ${d.added} quer${d.added === 1 ? "y" : "ies"}.${d.note ? " " + d.note : ""}`;
+    $("#msg").textContent = d.error || `Queued ${d.added} quer${d.added === 1 ? "y" : "ies"}${d.proxies ? ` with ${d.proxies} prox${d.proxies === 1 ? "y" : "ies"}` : ""}.${d.note ? " " + d.note : ""}`;
     if (!d.error) $("#q").value = "";
-    if (d.needKey) loadUpload();
   } catch (e) { $("#msg").textContent = "Could not reach the UI server."; }
-  $("#run").disabled = !keyOk;
+  $("#run").disabled = !browsersOk;
   refresh();
 };
 $("#clear").onclick = async () => { await fetch("/api/jobs/clear", { method: "POST" }); refresh(); };
 let queuePaused = false;
 $("#pauseQ").onclick = async () => {
   const r = await fetch(`/api/queue/${queuePaused ? "resume" : "pause"}`, { method: "POST" });
-  if (!r.ok) { const d = await r.json().catch(() => ({})); $("#msg").textContent = d.error || "Could not resume the queue."; if (d.needKey) loadUpload(); }
+  if (!r.ok) { const d = await r.json().catch(() => ({})); $("#msg").textContent = d.error || "Could not resume the queue."; }
   refresh();
 };
 // Per-run buttons (event delegation, the table is re-rendered every 1.5 s)
@@ -209,7 +239,7 @@ async function refresh() {
     $("#jobs").innerHTML = jobs.length ? jobs.slice().reverse().map((j) => `
       <tr>
         <td class="muted">${j.id}</td>
-        <td><span class="bb">${j.browser === "brave" ? "Brave" : "Chrome"}</span><span class="bb">${j.device === "mobile" ? "Mobile" : "Desktop"}</span><span class="bb">${j.headless ? "Headless" : "Headed"}</span><span class="mb ${j.mode}">${j.mode === "incognito" ? "Incognito" : "Logged-in"}</span>${j.profileName ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(j.profileName)}</div>` : ""}</td>
+        <td><span class="bb">${j.browser === "brave" ? "Brave" : "Chrome"}</span><span class="bb">${j.device === "mobile" ? "Mobile" : "Desktop"}</span><span class="bb">${j.headless ? "Headless" : "Headed"}</span><span class="mb ${j.mode}">${j.mode === "incognito" ? "Incognito" : "Logged-in"}</span>${j.profileName ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(j.profileName)}</div>` : ""}${j.proxy ? `<div class="muted" style="font-size:11px;margin-top:2px">Proxy: ${esc(j.proxy)}</div>` : ""}</td>
         <td>${esc(j.tag || "—")}</td>
         <td>${esc(j.query)}</td>
         <td><span class="badge s-${j.status}">${j.status}</span>${j.pass > 1 || j.history.length > 1 ? `<div class="muted" style="font-size:12px">Pass ${j.pass} of 3${j.history.length ? " · " + j.history.map((h) => h.status).join(" → ") : ""}</div>` : ""}${j.error ? `<div class="muted" style="font-size:12px">${esc(j.error)}</div>` : ""}${j.note ? `<div class="s-captcha" style="font-size:12px">${esc(j.note)}</div>` : ""}</td>
@@ -283,12 +313,13 @@ fetch("/api/browsers").then((r) => r.json()).then((list) => {
 let keyOk = false;
 let browsersOk = true;
 let changing = false;
+let runEnabled = true;
 const when = (iso) => new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const show = (el, on) => (el.style.display = on ? "contents" : "none");
 const note = (text, err) => { $("#keyNote").textContent = text || ""; $("#keyNote").classList.toggle("err", !!err); };
 function setRunEnabled() {
-  $("#run").disabled = !keyOk || !browsersOk;
-  $("#run").title = !keyOk ? "Add your API key first" : !browsersOk ? $("#run").title : "";
+  $("#run").disabled = !browsersOk;
+  $("#run").title = !browsersOk ? $("#run").title : !keyOk ? "No API key — searches will run locally but won't upload" : "";
 }
 async function loadUpload() {
   try {
@@ -296,7 +327,7 @@ async function loadUpload() {
     $("#getKey").href = u.keyUrl;
     const k = u.key;
     keyOk = !!k && !k.expired;
-    $("#keytab").classList.toggle("missing", !keyOk);
+    $("#keytab").classList.toggle("missing", false);
     show($("#keyNone"), !k || changing || k.expired);
     show($("#keySet"), !!k && !changing && !k.expired);
     if (k) {
@@ -337,6 +368,14 @@ $("#keyRemove").onclick = async () => {
   changing = false;
   loadUpload();
 };
+
+// ----- Proxy toggle -----
+$("#proxyToggle").onclick = () => $("#proxyBox").classList.toggle("open");
+$("#proxies").addEventListener("input", () => {
+  const n = $("#proxies").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).length;
+  $("#proxyCount").textContent = n;
+  $("#proxyCount").style.display = n ? "inline-block" : "none";
+});
 
 showMode();
 refresh();
