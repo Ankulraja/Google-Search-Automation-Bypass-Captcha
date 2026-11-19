@@ -38,6 +38,23 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let proxyPool: string[] = [];
 let proxyIdx = 0;
 
+interface ParsedProxy {
+  server: string; // host:port (for --proxy-server flag)
+  username?: string;
+  password?: string;
+}
+
+function parseProxy(proxy: string): ParsedProxy {
+  const url = proxy.includes("://") ? proxy : `http://${proxy}`;
+  const u = new URL(url);
+  const server = `${u.hostname}:${u.port || 80}`;
+  return {
+    server,
+    username: u.username ? decodeURIComponent(u.username) : undefined,
+    password: u.password ? decodeURIComponent(u.password) : undefined,
+  };
+}
+
 function checkProxy(proxy: string, timeoutMs = 5000): Promise<boolean> {
   return new Promise((resolve) => {
     try {
@@ -201,7 +218,7 @@ function checkInstalled(kind: BrowserKind): string {
 function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean, proxy?: string) {
   const exe = checkInstalled(kind);
   const args = [`--profile-directory=${profile}`, ...COMMON_ARGS];
-  if (proxy) args.push(`--proxy-server=${proxy}`);
+  if (proxy) { const p = parseProxy(proxy); args.push(`--proxy-server=${p.server}`); }
   return puppeteer.launch({
     executablePath: exe,
     headless: effectiveHeadless(headless),
@@ -216,7 +233,7 @@ function launchLoggedIn(kind: BrowserKind, profile: string, headless: boolean, p
 function launchIncognito(kind: BrowserKind, tmpDir: string, headless: boolean, proxy?: string) {
   const exe = checkInstalled(kind);
   const args = [...COMMON_ARGS];
-  if (proxy) args.push(`--proxy-server=${proxy}`);
+  if (proxy) { const p = parseProxy(proxy); args.push(`--proxy-server=${p.server}`); }
   return puppeteer.launch({
     executablePath: exe,
     headless: effectiveHeadless(headless),
@@ -256,6 +273,11 @@ async function runJob(browser: Browser, job: Job) {
   const ctx = job.mode === "incognito" ? await browser.createBrowserContext() : undefined;
   const page = ctx ? await ctx.newPage() : await browser.newPage();
   activePage = page;
+  // Proxy auth: Chrome's --proxy-server only takes host:port, so credentials go through page.authenticate()
+  if (job.proxy) {
+    const p = parseProxy(job.proxy);
+    if (p.username) await page.authenticate({ username: p.username, password: p.password || "" });
+  }
   if (job.device === "mobile") await emulateMobile(page, browser);
   // Headless Chrome announces itself as "HeadlessChrome" in its user agent; present the normal Chrome one instead
   else if (job.headless) await page.setUserAgent((await browser.userAgent()).replace("HeadlessChrome", "Chrome"));
